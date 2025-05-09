@@ -17,7 +17,7 @@ IDEAtlas collaborates with early adopters in eight pilot cities across four cont
 - Jakarta, Indonesia
 
 <p align="center">
-<img width="850" alt="image" src="https://github.com/user-attachments/assets/8d396119-d6f5-4265-8961-8717a8d51f52" />
+<img width="850" alt="image" src="![StudyAreas](https://github.com/user-attachments/assets/649ee0ba-3b18-4bb5-9c86-dff7d7c4838f)" />
 </p>
 
 
