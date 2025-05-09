@@ -1,0 +1,18 @@
+{
+  "DATASET": ["S2", "BD"],
+  "IN_SHAPE": {
+    "S1": [128, 128, 2],
+    "S2": [128, 128, 10],
+    "BD": [128, 128, 1],
+    "VHR": [512, 512, 4]
+  },
+  "LR": 1e-4,
+  "BATCH_SIZE": 4,
+  "N_CLASSES": 3,
+  "EPOCHS": 150,
+  "DATA_PATH": "../ideabench/data/", 
+  "CHECKPOINT_PATH": "./checkpoint/",
+  "LOG_PATH": "./log/",
+  "PREDICTION_PATH": "./prediction/"
+  
+}
