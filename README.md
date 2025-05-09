@@ -1,4 +1,4 @@
-![IdeAtlas header](https://github.com/user-attachments/assets/76a6c3ae-c9c3-4c5b-8973-f4b88a7b8e5a)
+![IdeAtlas header](https://github.com/user-attachments/assets/496adbd5-2d4f-47f1-ace7-f397584b2fea)
 
 # About the project
 IDEAtlas, an ESA-funded project, aims to develop, implement, validate, and showcase advanced AI-based methods to automatically map and characterize the spatial extent of deprived urban areas (DUAs) (slums or informal settlements) using Earth Observation (EO) data. This initiative supports national and local governments, as well as civil society, in monitoring progress on SDG indicator 11.1.1, which focuses on the proportion of the urban population living in slums, informal settlements, or inadequate housing. 
@@ -40,7 +40,7 @@ For each city, the input for the model was constructed from four data sources, a
 - A pre-computed built-up density (PBD) derived from Google Open Buildings, used as ancillary information.
 - A reference label with three classes.
 
-![datasource](https://github.com/user-attachments/assets/739e21b8-46ef-45a1-ad72-2c53ec3d6348)
+![datasource](https://github.com/user-attachments/assets/95beb153-af53-4e21-9b81-1e5d9a253e03)
 
 Fig. 2: Input data to train the AI model
 
@@ -51,7 +51,7 @@ Working closely with local communities, local governments, and a range of (inter
 
 To enhance computational efficiency and reduce model complexity, we reduced the number of levels in both the encoder and decoder blocks and decreased the number of filters, resulting in a more lightweight and efficient model. We adopted an early fusion with feature adaptation approach, which has demonstrated stable performance compared to middle and late fusion techniques when combining multi-source inputs.
 
-![MBCNN](https://github.com/user-attachments/assets/27fd25ed-386f-4c8b-bdfd-a42d836b7ab7)
+![MBCNN](https://github.com/user-attachments/assets/0600b18c-2516-4f45-abfa-733720e5b585)
 
 Fig. 3: Model architecture
 
