@@ -10,7 +10,7 @@
   "BATCH_SIZE": 4,
   "N_CLASSES": 3,
   "EPOCHS": 150,
-  "DATA_PATH": "./dataset/", 
+  "DATA_PATH": "../ideabench/data/", 
   "CHECKPOINT_PATH": "./checkpoint/",
   "LOG_PATH": "./log/",
   "PREDICTION_PATH": "./prediction/"

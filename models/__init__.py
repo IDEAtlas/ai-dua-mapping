@@ -1,0 +1,7 @@
+from models.deeplab import *
+from models.setr import *
+from models.glavitu import *
+from models.mbcnn import *
+from models.fcn import *
+from models.resunet import *
+from models.utils import *
