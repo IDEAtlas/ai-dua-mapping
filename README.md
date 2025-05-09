@@ -17,7 +17,7 @@ IDEAtlas collaborates with early adopters in eight pilot cities across four cont
 - Jakarta, Indonesia
 
 <p align="center">
-<img width="850" alt="image" src="![StudyAreas](https://github.com/user-attachments/assets/649ee0ba-3b18-4bb5-9c86-dff7d7c4838f)" />
+<img width="850" alt="image" src="https://github.com/user-attachments/assets/649ee0ba-3b18-4bb5-9c86-dff7d7c4838f" />
 </p>
 
 
@@ -40,7 +40,7 @@ For each city, the input for the model was constructed from four data sources, a
 - A pre-computed built-up density (PBD) derived from Google Open Buildings, used as ancillary information.
 - A reference label with three classes.
 
-![datasource](https://github.com/user-attachments/assets/95beb153-af53-4e21-9b81-1e5d9a253e03)
+![datasource](https://github.com/user-attachments/assets/65bb5856-e2c3-449e-bad2-3bac8aa5b085)
 
 Fig. 2: Input data to train the AI model
 
