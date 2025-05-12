@@ -1,3 +1,5 @@
+# Training, testing and inference pipeline 
+
 import os
 import argparse
 import numpy as np
