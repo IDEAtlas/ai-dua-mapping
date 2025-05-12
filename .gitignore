@@ -1,4 +1,4 @@
 checkpoint/
 log/
 prediction/
-*39.pyc
+*.pyc
