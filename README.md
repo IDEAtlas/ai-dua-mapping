@@ -59,11 +59,6 @@ Fig. 3: Model architecture
 Our experiments suggests that combining multi-spectral data with urban morphometric features, particularly Sentinel-2 imagery and built-up density, delivers the highest accuracy in identifying and mapping DUAs. The improved reference data (Reference V2) via the IDEAtlas platform showed an increase in accuracy. However, the significant variability in accuracy across the sample cities highlights the complexity of the problem and emphasizes the need for supplementary geospatial data to enhance limitation of EO data.
 
 
-Table 1: Performance of the MB-CNN model across 8 cities (P: precision, R: recall, F1: F1-score)
-<p align="center">
-<img width="641" alt="table4" src="https://github.com/user-attachments/assets/df3473ac-ed46-4637-9843-b22ae0447b42" />
-</p>
-
 Stay updated with our progress and contribute to the development of AI-based solutions for mapping deprived urban areas.
 
 - Website: https://ideatlas.eu/
