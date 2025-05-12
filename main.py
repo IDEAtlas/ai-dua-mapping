@@ -231,6 +231,6 @@ elif args.stage == "infer":
     # weight = '/data/experiments-tf/checkpoint/old/mumbai_s2_morph_mbcnn.weights.h5'
     model.load_weights(weight)
     aoi_path = f"../ideabench/aoi/{city}.geojson"
-    save_path = f'./prediction/{city}/{city}_{inputs_str}_{model.name}_{year}.tif'
+    save_path = f'./prediction/{city}_{inputs_str}_{model.name}_{year}.tif'
     ideatlas.full_inference_mbcnn(config.N_CLASSES, input_rasters, model, save_path, aoi_path, batch_size=32)
     # ideatlas.slide_window_inference(onfig.N_CLASSES, s2_path, model, save_path)
