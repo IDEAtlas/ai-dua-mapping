@@ -1,5 +1,4 @@
 checkpoint/
 log/
 prediction/
-*.pyc
-**/*.pyc
+__pycache__/
