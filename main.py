@@ -22,7 +22,7 @@ config = config.Config()
 parser = argparse.ArgumentParser(description="Train, evaluate or save a deep learning model.")
 parser.add_argument("--stage", choices=["train", "test", "infer"], required=True, help="Select mode: train, test or save")
 parser.add_argument("--city", type=str, required=True, help="Specify the city name")
-parser.add_argument("--model", type=str, required=True, choices=['unet', 'fcndk6', 'deeplabv3+', 'glavitu', 'mbcnn', 'lightunet', 'fpn'], help="Choose one of the model to use")
+parser.add_argument("--model", type=str, required=True, choices=['unet', 'fcndk6', 'deeplab', 'glavitu', 'mbcnn', 'lightunet', 'fpn'], help="Choose one of the model to use")
 parser.add_argument("--epochs", type=int, required=False, help="Specify the number of epochs")
 parser.add_argument("--batch", type=int, required=False, help="Specify the batch size")
 parser.add_argument("--s2", type=str, required=False, help="Specify the Sentinel-2 image path")
@@ -232,7 +232,7 @@ elif args.stage == "infer":
     weight = args.weight if args.weight else (f'./{config.CHECKPOINT_PATH}/{city}.{inputs_str}.{model.name}.weights.h5')
     # weight = '/data/experiments-tf/checkpoint/old/mumbai_s2_morph_mbcnn.weights.h5'
     model.load_weights(weight)
-    aoi_path = f"../ideabench/aoi/{city}.geojson"
+    aoi_path = f"../ideabench/aoi/{city}_aoi.geojson"
     save_path = f'./output/{city}_{inputs_str}_{model.name}_{year}.tif'
     ideatlas.full_inference_mbcnn(config.N_CLASSES, input_rasters, model, save_path, aoi_path, batch_size=32)
     # ideatlas.slide_window_inference(onfig.N_CLASSES, s2_path, model, save_path)

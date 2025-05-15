@@ -4,4 +4,5 @@ from models.glavitu import *
 from models.mbcnn import *
 from models.fcn import *
 from models.resunet import *
+from models.unet import *
 from models.utils import *
