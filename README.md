@@ -49,9 +49,10 @@ The benchmark dataset can be freely downloaded from Data Archiving and Networked
 # AI Model
 Working closely with local communities, local governments, and a range of (inter)national stakeholders, we co-designed an AI-driven strategy utilizing open Earth Observation (EO) and geospatial data to map DUAs in eight cities worldwide. We designed a tailored Multi-Branch Convolutional Neural Network (MB-CNN) architecture to fuse multi-modal data sources such as Sentinel 1 (S1), Sentinel 2 (S2), and pre-computed built-up density (PBD) for semantic segmentation of DUAs. The network consists of encoder and decoder blocks interconnected by skip connections to preserve fine-grained spatial information.
 
+
 To enhance computational efficiency and reduce model complexity, we reduced the number of levels in both the encoder and decoder blocks and decreased the number of filters, resulting in a more lightweight and efficient model. We adopted an early fusion with feature adaptation approach, which has demonstrated stable performance compared to middle and late fusion techniques when combining multi-source inputs.
 
-![MBCNN](https://github.com/user-attachments/assets/0f92f097-312f-4a70-a229-4b1e858514a7)
+![MBCNN-FULL](https://github.com/user-attachments/assets/b45610bc-588a-4b50-866c-5af9193e4fd1)
 
 Fig. 3: Model architecture
 
