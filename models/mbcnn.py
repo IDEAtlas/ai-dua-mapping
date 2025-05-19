@@ -33,7 +33,8 @@ def mbcnn(CL=3, input_shapes=None, dropout_rate=0.2, batch_norm=False, drop_trai
         if batch_norm:
             x = BatchNormalization(axis=-1)(x)
         x = Activation(activation)(x)
-
+        if dropout_rate > 0:
+            x = Dropout(dropout_rate)(x, training=drop_train)
         return x
 
     # Convolutions on each input
