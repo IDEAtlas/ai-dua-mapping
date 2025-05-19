@@ -67,7 +67,7 @@ if args.stage == "train":
 
     train_images = [dl.load_data(dir + 'train', h, w, input) for input in inputs]
     val_images = [dl.load_data(dir + 'val', h, w, input) for input in inputs]
-
+    
     if len(inputs) == 1:
         train_images = train_images[0]
         val_images = val_images[0]

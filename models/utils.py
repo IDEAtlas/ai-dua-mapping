@@ -20,7 +20,7 @@ def select_model(model_name, config):
         model = models.GlaViTU(input_shapes=input_shapes, n_outputs=n_outputs)[1]
     elif model_name == 'deeplab':
         # model = models.DeepLabV3Plus(input_shapes=input_shapes, n_outputs=n_outputs)[1]
-        model = models.CustomDeepLabV3Plus(input_shapes=input_shapes, num_classes=n_outputs).model
+        model = models.DeepLabV3Plus(input_shapes=input_shapes, num_classes=n_outputs).model
     elif model_name == 'unet':
         model = sm.Unet(input_shape=(h,w,c), classes=n_outputs, activation='softmax',  encoder_weights=None)
     elif model_name == 'fpn':
