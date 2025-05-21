@@ -52,7 +52,7 @@ Working closely with local communities, local governments, and a range of (inter
 
 To enhance computational efficiency and reduce model complexity, we reduced the number of levels in both the encoder and decoder blocks and decreased the number of filters, resulting in a more lightweight and efficient model. We adopted an early fusion with feature adaptation approach, which has demonstrated stable performance compared to middle and late fusion techniques when combining multi-source inputs.
 
-![MBCNN](https://github.com/user-attachments/assets/d28538de-d4a3-4517-af0f-3c52200c01be)
+![MBCNN](https://github.com/user-attachments/assets/be960219-cff3-43be-af82-48d2ef68d168)
 
 
 Fig. 3: Model architecture
