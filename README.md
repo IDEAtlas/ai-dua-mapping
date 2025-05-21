@@ -60,6 +60,9 @@ Fig. 3: Model architecture
 # Results
 Our experiments suggests that combining multi-spectral data with urban morphometric features, particularly Sentinel-2 imagery and built-up density, delivers the highest accuracy in identifying and mapping DUAs. The improved reference data (Reference V2) via the IDEAtlas platform showed an increase in accuracy. However, the significant variability in accuracy across the sample cities highlights the complexity of the problem and emphasizes the need for supplementary geospatial data to enhance limitation of EO data.
 
+![results1](https://github.com/user-attachments/assets/a861e423-d6d5-4c38-b297-02fc916d4414)
+
+![results2](https://github.com/user-attachments/assets/aee2b4fc-7181-4d6c-8b70-cd10e6b39066)
 
 Stay updated with our progress and contribute to the development of AI-based solutions for mapping deprived urban areas.
 
