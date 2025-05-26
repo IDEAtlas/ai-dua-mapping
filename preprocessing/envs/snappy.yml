@@ -1,0 +1,15 @@
+name: snappy
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - geopandas
+  - rioxarray
+  - gdal
+  - dask
+  - xarray
+  - tqdm
+  - requests
+  - pip
+  - pip:
+      - python-snappy
