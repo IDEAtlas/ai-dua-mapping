@@ -24,7 +24,7 @@ def select_model(model_name, config):
     elif model_name == 'unet':
         model = models.UNet(input_shape=(h,w,c), CL=n_outputs, dropout_rate=0.2, batch_norm=True)
     elif model_name == 'fpn':
-        model = sm.FPN(input_shape=(h,w,c), classes=n_outputs, activation='softmax', encoder_weights=None, backbone_name='resnet34')
+        model = sm.FPN(input_shape=(h,w,c), classes=n_outputs, activation='softmax', encoder_weights=None, backbone_name='resnet50')
     else:
         raise ValueError(f"Model {model_name} not recognized.")
     
