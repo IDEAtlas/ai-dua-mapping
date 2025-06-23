@@ -20,6 +20,7 @@ class Config:
         self.CHECKPOINT_PATH = config_data["CHECKPOINT_PATH"]
         self.LOG_PATH = config_data["LOG_PATH"]
         self.PREDICTION_PATH = config_data["PREDICTION_PATH"]
+        self.AOI = config_data["AOI"]
     
     # Set seed for reproducibility
     def set_seed(self):

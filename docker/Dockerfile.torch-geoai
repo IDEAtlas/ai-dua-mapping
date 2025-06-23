@@ -1,0 +1,28 @@
+# geoai-torch
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-dev git wget \
+    gdal-bin libgdal-dev python3-gdal \
+    curl libgl1 libglib2.0-0 libspatialindex-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
+
+RUN python -m pip install --upgrade pip setuptools wheel
+
+RUN pip install torch==2.2.2 torchvision==0.17.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+
+RUN pip install \
+    numpy==1.26.4 pandas==2.2.2 scipy==1.13.0 scikit-learn==1.5.0 \
+    matplotlib seaborn jupyterlab ipywidgets tqdm pillow opencv-python-headless \
+    tensorboard rioxarray segmentation-models-pytorch \
+    geopandas dask xarray rich torcheval pytorch-lightning
+
+RUN rm -rf ~/.cache/pip
+
+WORKDIR /data
+CMD ["/bin/bash"]

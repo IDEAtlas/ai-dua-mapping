@@ -7,10 +7,12 @@ from sklearn.utils.class_weight import compute_class_weight
 from glob import glob
 import geopandas as gpd
 
+
 def norm_s2(s2):
     if np.max(s2) > 3:
-        s2 = s2 / 10000
-    return s2
+        s2 = s2 / 10000.0
+    return np.clip(s2, 0, 1)
+    # return s2
 
 def percentile_clip(image, lower_percentile=0.5, upper_percentile=99.5):
     lower_bound = np.percentile(image, lower_percentile)
@@ -33,36 +35,6 @@ def load_data(img_dir, size_x, size_y, prefix, n_classes=None):
         images.append(data)
         ds.close()
     return np.array(images)
-
-def load_data_from_dirs(city_dirs, subdir_structure, load_function, *args):
-    """
-    Load and combine data from multiple city directories based on a subdirectory structure.
-
-    Parameters:
-        city_dirs (list): List of base directories for each city (e.g., ['city1', 'city2', ...]).
-        subdir_structure (list): List of relative paths for subdirectories to load (e.g., ['image/train_s1']).
-        load_function (function): Function to load data (`load_data` or `load_onehot`).
-        *args: Additional arguments for the load function.
-
-    Returns:
-        dict: A dictionary where keys are subdirectory paths and values are combined data arrays.
-    """
-    combined_data = {subdir: [] for subdir in subdir_structure}
-
-    for city_dir in city_dirs:
-        for subdir in subdir_structure:
-            full_path = os.path.join(city_dir, subdir)
-            try:
-                data = load_function(full_path, *args)
-                combined_data[subdir].append(data)
-            except Exception as e:
-                print(f"Error loading {subdir} in {city_dir}: {e}")
-    
-    # Concatenate data for each subdir
-    for subdir in subdir_structure:
-        combined_data[subdir] = np.concatenate(combined_data[subdir], axis=0)
-    
-    return combined_data
 
 
 def load_data_perBatch(data, label, batch_size):

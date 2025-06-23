@@ -92,7 +92,7 @@ if args.stage == "train":
     import segmentation_models as sm
     dice_loss = sm.losses.DiceLoss(class_weights=cl_weights) 
     focal_loss = sm.losses.CategoricalFocalLoss()
-    t_loss =  dice_loss + (1 * focal_loss)
+    t_loss =  dice_loss + (2 * focal_loss)
     j_loss = sm.losses.JaccardLoss(class_weights=cl_weights, class_indexes=None, per_image=False, smooth=1e-05)
     
     dice_focal = losses.CombinedDiceFocalLoss(class_idx = 2, gamma=2.0, alpha=0.25, dice_weight=0.25, focal_weight=0.75, class_weights=cl_weights)
@@ -225,14 +225,13 @@ elif args.stage == "infer":
     s2_path = args.s2
     bd_path = args.bd
     input_rasters = [s2_path, bd_path]
-    year = [i for i in s2_path.split('/') if i.startswith('20')][0]
+    year = s2_path.split('/')[-1].split('_')[1].split('.')[0]
     print(f'Year: {year}')
 
     model = models.select_model(args.model, config)
     weight = args.weight if args.weight else (f'./{config.CHECKPOINT_PATH}/{city}.{inputs_str}.{model.name}.weights.h5')
-    # weight = '/data/experiments-tf/checkpoint/old/mumbai_s2_morph_mbcnn.weights.h5'
     model.load_weights(weight)
-    aoi_path = f"../ideabench/aoi/{city}_aoi.geojson"
-    save_path = f'./output/{city}_{inputs_str}_{model.name}_{year}.tif'
+    aoi_path = f"{config.AOI}/{city}_aoi.geojson"
+    save_path = f'{config.PREDICTION_PATH}/{city}_{inputs_str}_{model.name}_{year}.tif'
     ideatlas.full_inference_mbcnn(config.N_CLASSES, input_rasters, model, save_path, aoi_path, batch_size=32)
-    # ideatlas.slide_window_inference(onfig.N_CLASSES, s2_path, model, save_path)
+    # ideatlas.slide_window_inference(config.N_CLASSES, s2_path, model, save_path)

@@ -3,7 +3,7 @@ import rasterio
 import rasterio.windows
 import numpy as np
 import dask
-from geoprocessing import utils
+import utils
 import argparse
 
 

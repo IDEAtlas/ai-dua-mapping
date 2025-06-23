@@ -7,12 +7,12 @@
     "VHR": [512, 512, 4]
   },
   "LR": 1e-4,
-  "BATCH_SIZE": 8,
+  "BATCH_SIZE": 16,
   "N_CLASSES": 3,
-  "EPOCHS": 150,
-  "DATA_PATH": "./input/", 
+  "EPOCHS": 250,
+  "DATA_PATH": "/data/ideabench/main/v2/", 
   "CHECKPOINT_PATH": "./checkpoint/",
   "LOG_PATH": "./log/",
-  "PREDICTION_PATH": "./output/"
-  
+  "PREDICTION_PATH": "/data/output/",
+  "AOI": "/data/raw/aoi/"
 }

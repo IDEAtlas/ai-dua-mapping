@@ -17,16 +17,16 @@ import snappy_config
 # Update Java max memory in snappy.ini
 # snappy_config.update_java_max_mem()
 start_time = time.time()
-city = 'addis_ababa'
+city = 'nairobi'
 basedir = '/data/raw/'
-year = '2025'
+year = '2019'
 
-aoi_path = os.path.join(basedir, city, f'{city}_bnd.geojson')
+aoi_path = os.path.join(basedir, "aoi", f'{city}_aoi.geojson')
 if not os.path.exists(aoi_path):
     raise FileNotFoundError(f"AOI file not found at {aoi_path}")
 
 aoi = geopandas.read_file(aoi_path).to_crs(epsg=4326)
-
+print(f"AOI CRS: {aoi.crs}")
 if aoi.empty:
     raise ValueError(f"AOI file {aoi_path} contains no valid geometries.")
 
@@ -39,7 +39,7 @@ os.makedirs(output_dir, exist_ok=True)
 
 # Search Sentinel-2 scenes
 api = infrastructure.creodias.ODataAPI()
-s2_scenes = api.search("S2", "L2A", start_date="2025-02-01", end_date="2025-02-07", max_cloud_cover=0.1, geometry=geometry, expand=True)
+s2_scenes = api.search("S2", "L2A", start_date="2019-04-01", end_date="2019-04-29", max_cloud_cover=15, geometry=geometry, expand=True)
 sentinel2_paths = [_["S3Path"] for _ in s2_scenes["value"]]
 if len(sentinel2_paths) == 0:
     raise ValueError("No Sentinel-2 scenes found for the specified date range and AOI.")
@@ -49,19 +49,19 @@ else:
 for path in sentinel2_paths:
     filename = path.split(os.sep)[-1]
     filename = ''.join(filename.split('.')[:-1])
-    output_path = os.path.join(basedir, city, "sentinel", year, f"{filename}.tif")
+    output_path = os.path.join(basedir, "sentinel", city, year, f"{filename}.tif")
     preprocess_s2(path, aoi_path, output_path)
 
-S2_list = glob.glob(os.path.join(basedir, city, "sentinel", year, "S2*.tif")) #
-sentinel2_mosaic_path = os.path.join(basedir, city, "sentinel", year,  f"S2_{year}_mosaic.tif")
+S2_list = glob.glob(os.path.join(basedir, "sentinel", city, year, "S2*.tif")) #
+sentinel2_mosaic_path = os.path.join(basedir, "sentinel", city, year,  f"S2_{year}_mosaic.tif")
 print(f"Sentinel2 glob: {S2_list}")
 print(f"Sentinel2 paths: {sentinel2_paths}")
 
 if len(S2_list) > 1:
     mosaic.mosaic(S2_list, sentinel2_mosaic_path, window_size=2048, chunk_size=512, num_workers=16, 
                   scheduler="threads", nodata=0)
-align_rasters.align_raster(sentinel2_mosaic_path, basedir + city + '/Density_scaled.tif', 
-                           os.path.join(basedir, city, "sentinel", year, f"S2_{year}_aligned.tif"))
+align_rasters.align_raster(sentinel2_mosaic_path, basedir + 'buildings/density' + f'/{city}_bd.tif', 
+                           os.path.join(basedir, "sentinel", city, year, f"S2_{year}_aligned.tif"))
 
 #check if the acquisition date is after january 20 2022
 if s2_scenes["value"][0]["OriginDate"] > "2022-01-20T00:00:00Z":

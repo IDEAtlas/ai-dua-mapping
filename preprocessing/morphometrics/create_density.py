@@ -6,7 +6,6 @@ import tifffile
 import time
 import geopandas as gpd
 
-start_time = time.time() #gets the current time
 
 def georrefData(data, filename, metadata):
 	dataset = gdal.Open(metadata)
@@ -208,6 +207,9 @@ def CreateDensity(sentinelImg, DensityShape, saveadd):
     #scale the density raster to 0-1
     # density = np.clip(density, 0, 1)  # Ensure values are between 0 and 1
     # density[np.isnan(density)] = 0  # Set NaN values to 0
+
+    # completion message
+    print(f"Density raster saved to {saveadd}")
     
 
 
@@ -217,20 +219,11 @@ def CreateDensity(sentinelImg, DensityShape, saveadd):
 #2) The buildings/morphometrics shapefile
 #3) address  to save the rasters with the morphometrics
 
-city = 'addis_ababa'
+city = 'buenos_aires'
 basedir = '/data/raw/'
+year = 2023
 
-# bldg = gpd.read_parquet(os.path.join(basedir, city, "buildings.parquet"))  
-# print(bldg.head())
 
-CreateDensity(os.path.join(basedir, city, 'S2_2025.tif'),os.path.join(basedir, city, 'buildings/buildings.geojson'), os.path.join(basedir, city, 'Density.tif'))
-
-end_time = time.time()
-
-elapsed_time = end_time-start_time
-
-# Calculate hours and minutes
-hours, remainder = divmod(elapsed_time, 3600)
-minutes, seconds = divmod(remainder, 60)
-
-print(f"Elapsed time: {int(hours)} hours {int(minutes)} minutes")
+CreateDensity(os.path.join(basedir, "sentinel", city, f'S2_{year}.tif'), 
+os.path.join(basedir, f'buildings/{city}_bldg.geojson'), 
+os.path.join(basedir, f'buildings/density/{city}_bd.tif'))
