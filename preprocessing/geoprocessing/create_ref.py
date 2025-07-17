@@ -77,7 +77,8 @@ def create_reference(aoi, ghsl, duas, output):
     # Overlay the polygon mask onto the binary raster
     binary_raster.values[0] = np.where(polygon_mask > 0, polygon_mask, binary_raster.values[0])
 
-    binary_raster.rio.to_raster(output, compress="lzw", dtype="uint8")
+    # binary_raster.rio.to_raster(output, compress="lzw", dtype="uint8")
+    binary_raster.rio.to_raster(output, compress="LZW")
     print(f"Reference mask saved to {output}")
 
 
