@@ -13,7 +13,7 @@ import numpy as np
 
 catalog = Client.open("https://planetarycomputer.microsoft.com/api/stac/v1")
 
-city = 'buenos_aires'  # Change this to your desired city
+city = 'lagos'  # Change this to your desired city
 basedir = '/data/raw/'
 
 aoi = geopandas.read_file(os.path.join(basedir, 'aoi', f'{city}_aoi.geojson')).to_crs(epsg=4326)
@@ -21,14 +21,14 @@ aoi = geopandas.read_file(os.path.join(basedir, 'aoi', f'{city}_aoi.geojson')).t
 print(f"AOI CRS: {aoi.crs}")
 bbox = aoi.total_bounds
 
-year = '2024'
-time_range = f"{year}-03-02/{year}-03-28"  # Adjust the date range as needed
+year = '2023'
+time_range = f"{year}-02-11/{year}-02-12"  # Adjust the date range as needed
 
 search = catalog.search(
     collections=["sentinel-2-l2a"],
     bbox=bbox,
     datetime=time_range,
-    query={"eo:cloud_cover": {"lt": 1}},
+    query={"eo:cloud_cover": {"lt": 2}},
 )
 
 
@@ -55,7 +55,7 @@ df = geopandas.GeoDataFrame(props, geometry=geoms, crs="epsg:4326")
 
 selected_item = min(items, key=lambda item: item.properties["eo:cloud_cover"])
 # print selected item corrdinate system
-print(selected_item.properties["proj:code"])
+print(f'Raw EPSG code: {selected_item.properties["proj:code"]}')
 
 # Filter items that actually intersect with the AOI geometry
 intersecting_items = [
@@ -77,7 +77,7 @@ stack = (stackstac.stack(
     epsg=int(str(selected_item.properties["proj:code"]).replace("EPSG:", "")),
     resolution=10,
     bounds_latlon=bbox,
-    chunksize=2048,)
+    chunksize=2048,).astype("float32")
 )
 
 # mosaic = stack.max("time")
@@ -113,8 +113,19 @@ print("Mosaic max:", mosaic.max().values)
 # mosaic.rio.to_raster(out_path) #to save in UTM coordinates
 mosaic_wgs = mosaic.rio.reproject("EPSG:4326")
 # save the mosaic without nan values
-mosaic_wgs = mosaic_wgs.where(~np.isnan(mosaic_wgs), 0)  # Replace NaN values with 0
+# mosaic_wgs = mosaic_wgs.where(~np.isnan(mosaic_wgs), 0)  # Replace NaN values with 0
 mosaic_wgs.attrs["crs"] = "EPSG:4326"  # Set CRS to WGS84
-mosaic_wgs.rio.to_raster(out_path)
+#PRINT CRS
+print("Mosaic CRS:", mosaic_wgs.rio.crs)
+mosaic_wgs.rio.to_raster(out_path, nodata=0)
+
+# mosaic.rio.to_raster(
+#     out_path,
+#     tiled=True,
+#     windowed=True,
+#     compress="deflate",
+#     BIGTIFF="YES",
+#     nodata=0
+# )
 
 print(f"Mosaic saved to {out_path}")

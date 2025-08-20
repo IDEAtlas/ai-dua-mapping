@@ -1,30 +1,24 @@
-# geoai-tf
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+# Official TF GPU image (Python 3.10, CUDA 12.1, cuDNN 8)
+FROM tensorflow/tensorflow:2.13.0-gpu
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
-ENV TF_CPP_MIN_LOG_LEVEL=3
-ENV absl_log_stderr_threshold=FATAL
-
+# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-dev git wget \
     gdal-bin libgdal-dev python3-gdal \
-    curl libgl1 libglib2.0-0 libspatialindex-dev \
+    libgl1 libglib2.0-0 libspatialindex-dev \
+    proj-bin libproj-dev \
+    build-essential pkg-config \
+    pciutils curl git wget \
     && rm -rf /var/lib/apt/lists/*
-
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1
 
 RUN python -m pip install --upgrade pip setuptools wheel
 
-RUN pip install tensorflow
-
-RUN pip install \
+# Install geospatial and scientific Python packages
+RUN pip install --no-cache-dir \
     pandas scipy scikit-learn \
     matplotlib seaborn jupyterlab ipywidgets tqdm pillow opencv-python-headless \
     tensorboard rioxarray segmentation-models \
-    geopandas dask xarray rich
-
-RUN rm -rf ~/.cache/pip
+    fiona geopandas dask xarray rich \
+    rasterio \
 
 WORKDIR /data
 CMD ["/bin/bash"]
