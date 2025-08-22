@@ -35,6 +35,7 @@ def extract_patches(
     raster_path: str,
     grid_path: str,
     output_root: str,
+    prefix: str,
     patch_size: int = 128,
     nodata: int = None,
     verbose: bool = True
@@ -46,6 +47,7 @@ def extract_patches(
         raster_path: Path to input raster
         grid_path: Path to grid file with FID and set assignments
         output_root: Root output directory
+        prefix: Prefix for output files
         patch_size: Patch size in pixels (default: 128)
         nodata: Custom nodata value (default: read from raster)
         verbose: Show progress bars (default: True)
@@ -99,7 +101,7 @@ def extract_patches(
                     )
 
                     # Save patch using patch_id
-                    output_path = os.path.join(output_root, set_name, f"S1_{patch_id}.tif")# change the prfix depending on type of data used(RF_, S2_, S1_, VHR_)
+                    output_path = os.path.join(output_root, set_name, f"{prefix}_{patch_id}.tif")# change the prfix depending on type of data used(RF_, S2_, S1_, VHR_)
                     with rasterio.open(
                         output_path,
                         'w',
@@ -133,6 +135,7 @@ if __name__ == "__main__":
     parser.add_argument('--raster', required=True, help='Input raster path')
     parser.add_argument('--grid', required=True, help='Grid file with set assignments')
     parser.add_argument('--output', required=True, help='Root output directory')
+    parser.add_argument('--prefix', type=str, required=True, help='Prefix for output files')
     parser.add_argument('--patch_size', type=int, default=128, help='Patch size in pixels')
     parser.add_argument('--nodata', type=float, help='Override nodata value')
     parser.add_argument('--quiet', action='store_true', help='Disable progress output')
@@ -143,6 +146,7 @@ if __name__ == "__main__":
         raster_path=args.raster,
         grid_path=args.grid,
         output_root=args.output,
+        prefix=args.prefix,
         patch_size=args.patch_size,
         nodata=args.nodata,
         verbose=not args.quiet
