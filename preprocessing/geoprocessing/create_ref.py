@@ -133,6 +133,10 @@ def create_reference(sentinel_raster, ghsl, duas, output):
     gc.collect()
 
     print("Binarizing the GHSL raster (values > 15 -> 1, values <= 15 -> 0)...")
+    # Handle nodata values explicitly - set them to 0
+    print("Setting nodata values to 0...")
+    aligned_raster = aligned_raster.fillna(0)
+    
     # Process in chunks to avoid memory issues
     binary_raster = aligned_raster.where(aligned_raster > 15, 0)
     binary_raster = binary_raster.where(binary_raster == 0, 1)
@@ -157,18 +161,28 @@ def create_reference(sentinel_raster, ghsl, duas, output):
             out_shape=(target_height, target_width),
             transform=target_transform,
             fill=0,
-            dtype="uint8"
+            dtype="uint8",
+            all_touched=False
         )
 
     print("Combining binary raster with DUA mask...")
     # Overlay the polygon mask onto the binary raster
     binary_raster.values[0] = np.where(polygon_mask > 0, polygon_mask, binary_raster.values[0])
     
+    # Ensure all values are within valid range [0, 1, 2] and convert any invalid values to 0
+    binary_raster.values[0] = np.clip(binary_raster.values[0], 0, 2)
+    
     # Free memory
     del polygon_mask
     gc.collect()
 
     print(f"Saving reference mask to {output}...")
+    # Ensure nodata values are set to 0 before saving and explicitly set nodata to None
+    binary_raster = binary_raster.fillna(0)
+    
+    # Set the nodata value to None to prevent 255 from being used as nodata
+    binary_raster.rio.write_nodata(None, inplace=True)
+    
     binary_raster.rio.to_raster(output, compress="LZW", dtype="uint8")
     print(f"Reference mask saved to {output}")
     
