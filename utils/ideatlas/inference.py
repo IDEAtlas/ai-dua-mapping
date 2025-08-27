@@ -382,15 +382,14 @@ def full_inference_mbcnn(N_CLASSES, image_sources, model, save_path, aoi_path, b
     # Load and preprocess input rasters
     rasters = [rio.open(src).read().transpose(1, 2, 0) for src in image_sources]
     input1 = norm_s2(rasters[0])  # Normalize Sentinel-2 input
-    # priint min and max of input1
-    print(f'Input 1 min: {np.min(input1)}, max: {np.max(input1)}')
-    print(f'Input 2 min: {np.min(rasters[1])}, max: {np.max(rasters[1])}')
-    # print(f'Input
-    input2 = rasters[1]           # Second input as is
+    input2 = rasters[1]
+
+    print(f'Input 1 min: {np.nanmin(input1)}, max: {np.nanmax(input1)}')
+    print(f'Input 2 min: {np.nanmin(input2)}, max: {np.nanmax(input2)}')
 
     # print(f'S2 shape: {input1.shape}')
     # print(f'PBD shape: {input2.shape}')
-    
+
     patch_height, patch_width = model.inputs[0].shape[1:3]
     stride = patch_height // 2
     image_height, image_width = input1.shape[:2]
