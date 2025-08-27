@@ -25,8 +25,8 @@ parser.add_argument("--city", type=str, required=True, help="Specify the city na
 parser.add_argument("--model", type=str, required=True, choices=['unet', 'fcndk6', 'deeplab', 'glavitu', 'mbcnn', 'lightunet', 'fpn'], help="Choose one of the model to use")
 parser.add_argument("--epochs", type=int, required=False, help="Specify the number of epochs")
 parser.add_argument("--batch", type=int, required=False, help="Specify the batch size")
-parser.add_argument("--s2", type=str, required=False, help="Specify the Sentinel-2 image path")
-parser.add_argument("--bd", type=str, required=False, help="Specify the building density raster path")
+parser.add_argument("--s2", type=str, required=False, help="Sentinel-2 image path (only for inference)")
+parser.add_argument("--bd", type=str, required=False, help="Building density raster path (only for inference)")
 parser.add_argument("--weight", type=str, required=False, help="Specify path to the model weight")
 
 args = parser.parse_args()
@@ -89,20 +89,21 @@ if args.stage == "train":
     # ideatlas.patch_class_proportion(train_masks)
     cl_weights = dl.calculate_class_weights(train_label)
     print(f'Class weight: {cl_weights}')
+    
     import segmentation_models as sm
     dice_loss = sm.losses.DiceLoss(class_weights=cl_weights) 
     focal_loss = sm.losses.CategoricalFocalLoss()
     t_loss =  dice_loss + (2 * focal_loss)
     j_loss = sm.losses.JaccardLoss(class_weights=cl_weights, class_indexes=None, per_image=False, smooth=1e-05)
     
-    dice_focal = losses.CombinedDiceFocalLoss(class_idx = 2, gamma=2.0, alpha=0.25, dice_weight=0.25, focal_weight=0.75, class_weights=cl_weights)
-    focal = losses.FocalLoss(gamma=2.0, alphas=0.25)
+    # dice_focal = losses.CombinedDiceFocalLoss(class_idx = 2, gamma=2.0, alpha=0.25, dice_weight=0.25, focal_weight=0.75, class_weights=cl_weights)
+    # focal = losses.FocalLoss(gamma=2.0, alphas=0.25)
 
     model = models.select_model(args.model, config)
     model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=config.LR),
     loss=t_loss,
-    metrics=[sm.metrics.FScore(threshold=0.5, class_indexes=[0,1,2], name='f1', class_weights=cl_weights)]         
+    metrics=[sm.metrics.FScore(name='f1')]         
     )
 
     print(f'Model -> {model.name} \n'
