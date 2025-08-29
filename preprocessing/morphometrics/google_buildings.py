@@ -1,36 +1,185 @@
+#!/usr/bin/env python3
+"""Google Open Buildings v3 Downloader - Downloads building polygons for custom areas."""
+
 import argparse
+import functools
+import json
+import multiprocessing
+import logging
+from typing import List, Optional
+
 import geopandas as gpd
 import pandas as pd
-from shapely.geometry import box
-import os
+import shapely
+from shapely.geometry import shape
+import s2geometry as s2
+import requests
 
-def get_aoi_bounds(aoi_path):
-    aoi_path = os.path.join(aoi_path)
-    if not os.path.exists(aoi_path):
-        raise FileNotFoundError(f"AOI file not found at {aoi_path}")
-    aoi = gpd.read_file(aoi_path).to_crs("EPSG:4326")
-    if aoi.empty:
-        raise ValueError(f"AOI file {aoi_path} contains no valid geometries.")
-    aoi_geometry = aoi.iloc[0].geometry
-    return aoi_geometry.bounds
+#logger time should be hour, minute, second 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-def filter_geometries(csv_gz_path, aoi_bounds, output_path):
-    aoi_bbox = box(*aoi_bounds)
-    df = pd.read_csv(csv_gz_path, compression='gzip')
-    gdf = gpd.GeoDataFrame(df, geometry=gpd.GeoSeries.from_wkt(df['geometry']), crs='EPSG:4326')
-    filtered_gdf = gdf[gdf.intersects(aoi_bbox)]
-    filtered_gdf.to_file(output_path, driver='GeoJSON')
-    print(f"Filtered GeoJSON saved to {output_path}")
+def load_polygon_from_geojson(geojson_path: str) -> gpd.GeoDataFrame:
+    """Load polygon from GeoJSON file."""
+    logger.info(f"Loading AOI from: {geojson_path}")
+    aoi = gpd.read_file(geojson_path).to_crs("EPSG:4326")
+    logger.info(f"AOI bounds: {aoi.total_bounds}")
+    return aoi
+
+
+def get_bounding_box_s2_covering_tokens(aoi: gpd.GeoDataFrame) -> List[str]:
+    """Get S2 tokens covering the region bounding box with 1km buffer."""
+    logger.info("Calculating S2 cell coverage for bounding box with 1km buffer")
+    
+    # Get unified geometry and bounds
+    aoi_geom = aoi.geometry.unary_union
+    region_bounds = aoi_geom.bounds
+    
+    # Add 1km buffer (approximately 0.009 degrees at equator)
+    buffer_degrees = 0.009
+    buffered_bounds = (
+        region_bounds[0] - buffer_degrees,  # min longitude
+        region_bounds[1] - buffer_degrees,  # min latitude
+        region_bounds[2] + buffer_degrees,  # max longitude
+        region_bounds[3] + buffer_degrees   # max latitude
+    )
+    
+    s2_lat_lng_rect = s2.S2LatLngRect_FromPointPair(
+        s2.S2LatLng_FromDegrees(buffered_bounds[1], buffered_bounds[0]),
+        s2.S2LatLng_FromDegrees(buffered_bounds[3], buffered_bounds[2])
+    )
+    coverer = s2.S2RegionCoverer()
+    coverer.set_fixed_level(6)
+    coverer.set_max_cells(1000000)
+    tokens = [cell.ToToken() for cell in coverer.GetCovering(s2_lat_lng_rect)]
+    logger.info(f"Found {len(tokens)} S2 tokens to process: {tokens}")
+    return tokens
+
+def s2_token_to_shapely_polygon(s2_token: str):
+    """Convert S2 token to shapely polygon."""
+    s2_cell = s2.S2Cell(s2.S2CellId_FromToken(s2_token, len(s2_token)))
+    coords = []
+    for i in range(4):
+        s2_lat_lng = s2.S2LatLng(s2_cell.GetVertex(i))
+        coords.append((s2_lat_lng.lng().degrees(), s2_lat_lng.lat().degrees()))
+    return shapely.geometry.Polygon(coords)
+
+
+def download_s2_token_to_memory(s2_token: str, aoi: gpd.GeoDataFrame, original_bounds: tuple) -> Optional[pd.DataFrame]:
+    """Download building data for S2 token."""
+    s2_cell_geometry = s2_token_to_shapely_polygon(s2_token)
+    
+    # Use buffered bounds for S2 token intersection check
+    aoi_geom = aoi.geometry.unary_union
+    buffered_bounds = aoi_geom.bounds
+    buffer_degrees = 0.009
+    buffered_bounds = (
+        buffered_bounds[0] - buffer_degrees,
+        buffered_bounds[1] - buffer_degrees,
+        buffered_bounds[2] + buffer_degrees,
+        buffered_bounds[3] + buffer_degrees
+    )
+    
+    s2_bounds = s2_cell_geometry.bounds
+    
+    if (s2_bounds[2] < buffered_bounds[0] or s2_bounds[0] > buffered_bounds[2] or
+        s2_bounds[3] < buffered_bounds[1] or s2_bounds[1] > buffered_bounds[3]):
+        return None
+        
+    try:
+        import io
+        # Convert GCS path to public HTTP URL
+        url = f"https://storage.googleapis.com/open-buildings-data/v3/polygons_s2_level_6_gzip_no_header/{s2_token}_buildings.csv.gz"
+        
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        with io.BytesIO(response.content) as bio:
+            df = pd.read_csv(bio, compression='gzip', header=None,
+                           names=['latitude', 'longitude', 'area_in_meters', 'confidence', 'geometry', 'full_plus_code'])
+            
+            # Use original bounds for final filtering (no buffer on output)
+            mask = ((df['latitude'] >= original_bounds[1]) & (df['latitude'] <= original_bounds[3]) &
+                    (df['longitude'] >= original_bounds[0]) & (df['longitude'] <= original_bounds[2]))
+            
+            filtered_df = df[mask]
+            if len(filtered_df) > 0:
+                logger.info(f"Token {s2_token}: Found {len(filtered_df)} buildings")
+                return filtered_df
+            return None
+            
+    except (requests.exceptions.RequestException, requests.exceptions.HTTPError) as e:
+        logger.warning(f"Token {s2_token}: Failed to download - {e}")
+        return None
+
+
+def convert_dataframe_to_geospatial(df: pd.DataFrame, output_path: str, format_type: str):
+    """Convert DataFrame to geospatial format."""
+    logger.info(f"Saving dataframe as {format_type.upper()}")
+    df['geometry'] = gpd.GeoSeries.from_wkt(df['geometry'])
+    gdf = gpd.GeoDataFrame(df, geometry='geometry', crs='EPSG:4326')
+    gdf = gdf[gdf['geometry'].notna()]
+    
+    if format_type == 'geojson':
+        gdf.to_file(output_path, driver='GeoJSON')
+    elif format_type == 'gpkg':
+        gdf.to_file(output_path, driver='GPKG')
+    elif format_type == 'shp':
+        gdf.to_file(output_path, driver='ESRI Shapefile')
+    elif format_type == 'parquet':
+        gdf.to_parquet(output_path)
+    
+    logger.info(f"Saved {len(gdf)} buildings to: {output_path}")
+
+
+def download_buildings_to_memory(aoi: gpd.GeoDataFrame, num_workers: int = 4):
+    """Download building data to memory."""
+    aoi_geom = aoi.geometry.unary_union
+    original_bounds = aoi_geom.bounds
+    s2_tokens = get_bounding_box_s2_covering_tokens(aoi)
+    download_s2_token_fn = functools.partial(download_s2_token_to_memory, aoi=aoi, original_bounds=original_bounds)
+    
+    logger.info(f"Starting download with {num_workers} workers")
+    all_dataframes = []
+    
+    with multiprocessing.Pool(num_workers) as pool:
+        for df in pool.imap_unordered(download_s2_token_fn, s2_tokens):
+            if df is not None:
+                all_dataframes.append(df)
+    
+    if all_dataframes:
+        total_buildings = sum(len(d) for d in all_dataframes)
+        logger.info(f"Filtering completed: {len(all_dataframes)} tokens containing a total of {total_buildings} buildings")
+        return pd.concat(all_dataframes, ignore_index=True)
+    else:
+        logger.warning("No buildings found in any S2 tokens")
+        return None
+
 
 def main():
-    parser = argparse.ArgumentParser(description='Filter geometries from a compressed CSV file based on an AOI bounding box and save as GeoJSON.')
-    parser.add_argument('input_path', type=str, help='Path to the compressed CSV.GZ file ')
-    parser.add_argument('aoi_path', type=str, help='Path to where the AOI file is located.')
-    parser.add_argument('output_path', type=str, help='Path to save the filtered GeoJSON file.')
+    parser = argparse.ArgumentParser(description='Download Google Open Buildings v3 data')
+    parser.add_argument('--aoi', required=True, help='AOI file path')
+    parser.add_argument('--output', '-o', required=True, help='Output file path (without extension)')
+    parser.add_argument('--format', '-f', choices=['geojson', 'gpkg', 'shp', 'parquet'], 
+                       default='gpkg', help='Output format')
+    parser.add_argument('--workers', '-w', type=int, default=4, help='Number of workers')
     
     args = parser.parse_args()
-    aoi_bounds = get_aoi_bounds(args.aoi_path)
-    filter_geometries(args.input_path, aoi_bounds, args.output_path)
+    
+    logger.info("Starting Google Open Buildings v3 download")
+    logger.info(f"Configuration: format={args.format}, workers={args.workers}")
+    
+    aoi = load_polygon_from_geojson(args.aoi)
+    combined_df = download_buildings_to_memory(aoi, args.workers)
+    
+    if combined_df is not None and len(combined_df) > 0:
+        extensions = {'geojson': '.geojson', 'gpkg': '.gpkg', 'shp': '.shp', 'parquet': '.parquet'}
+        final_output_path = args.output + extensions[args.format]
+        convert_dataframe_to_geospatial(combined_df, final_output_path, args.format)
+        logger.info("Process completed successfully")
+    else:
+        logger.error("No buildings found - process completed with no output")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
