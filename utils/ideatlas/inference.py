@@ -327,6 +327,9 @@ def mtcnn_inference(N_CLASSES, raster_paths, pbd_path, model, prediction_path, v
     large_s2 = np.moveaxis(s2, 0, -1)
     large_pbd = pbd
 
+    # Handle NaN values as a safety measure
+    large_s2 = np.nan_to_num(large_s2, nan=0.0)
+
     patch_height, patch_width = model.inputs[0].shape[1], model.inputs[0].shape[2]
     stride = int(patch_height / 4)  # Set the desired overlap between patches
     image_height, image_width = large_s2.shape[:2]
@@ -381,11 +384,13 @@ def full_inference_mbcnn(N_CLASSES, image_sources, model, save_path, aoi_path, b
     """
     # Load and preprocess input rasters
     rasters = [rio.open(src).read().transpose(1, 2, 0) for src in image_sources]
+    rasters[0] = np.nan_to_num(rasters[0], nan=0.0)
+    
     input1 = norm_s2(rasters[0])  # Normalize Sentinel-2 input
     input2 = rasters[1]
 
-    print(f'Input 1 min: {np.nanmin(input1)}, max: {np.nanmax(input1)}')
-    print(f'Input 2 min: {np.nanmin(input2)}, max: {np.nanmax(input2)}')
+    print(f'Input 1 min: {np.min(input1)}, max: {np.max(input1)}')
+    print(f'Input 2 min: {np.min(input2)}, max: {np.max(input2)}')
 
     # print(f'S2 shape: {input1.shape}')
     # print(f'PBD shape: {input2.shape}')

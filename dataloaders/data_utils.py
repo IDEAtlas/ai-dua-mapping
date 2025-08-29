@@ -12,7 +12,6 @@ def norm_s2(s2):
     if np.max(s2) > 3:
         s2 = s2 / 10000.0
     return np.clip(s2, 0, 1)
-    # return s2
 
 def percentile_clip(image, lower_percentile=0.5, upper_percentile=99.5):
     lower_bound = np.percentile(image, lower_percentile)
@@ -27,7 +26,8 @@ def load_data(img_dir, size_x, size_y, prefix, n_classes=None):
         ds = rio.open(img_path)
         data = ds.read(window=((0, size_y), (0, size_x)))
         data = np.moveaxis(data, 0, -1)
-        # Normalize the data if the input is Sentinel-2 and max value is greater than 3
+        data = np.nan_to_num(data, nan=0.0)
+                
         if 'S2' in img_path and np.max(data) > 3:
             data = norm_s2(data)
         if n_classes:
