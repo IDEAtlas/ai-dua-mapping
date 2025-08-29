@@ -27,19 +27,18 @@ warnings.filterwarnings("ignore")
 CITY = "lagos"
 BASEDIR = "/data/raw/"
 GEOJSON_FILE = os.path.join(BASEDIR, "aoi", f"{CITY}_aoi.geojson")
-YEAR = 2024
-START_DATE = f"{YEAR}-01-11"
-END_DATE = f"{YEAR}-08-28"
-MAX_CLOUD_COVER = 1
+YEAR = 2022
+START_DATE = f"{YEAR}-01-06"
+END_DATE = f"{YEAR}-12-18"
+MAX_CLOUD_COVER = 15
 CHUNK_SIZE = 512
 OUTPUT_DIR = os.path.join(BASEDIR, "sentinel", CITY)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Processing parameters
-RESOLUTION = 10  # Will be converted to degrees based on native 10m band
+RESOLUTION = 10
 RESAMPLING_METHOD = Resampling.bilinear
 COMPRESSION = "LZW"
-TO_SR = False  # Convert to surface reflectance
 
 # Selected Sentinel-2 bands
 BAND_ASSETS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
@@ -102,7 +101,6 @@ except Exception as e:
 from shapely.geometry import shape
 from shapely.ops import unary_union
 
-# Geometry of AOI (merged if multi-part)
 aoi_geom = aoi.geometry.unary_union
 
 items_by_tile = {}
@@ -110,7 +108,7 @@ for it in items:
     try:
         footprint = shape(it.geometry)
         if not footprint.intersects(aoi_geom):
-            continue  # skip tiles not overlapping AOI
+            continue
 
         tile_id = it.properties.get("s2:mgrs_tile") or it.id
         cloud = float(it.properties.get("eo:cloud_cover", 100.0))
@@ -123,7 +121,6 @@ for it in items:
         logger.warning(f"Error filtering item {it.id}: {e}")
         continue
 
-# Final filtered items
 filtered_items = [v["item"] for v in items_by_tile.values()]
 signed_items = [pc.sign(it) for it in filtered_items]
 
@@ -131,8 +128,6 @@ logger.info(f"Selected {len(filtered_items)} unique tiles after filtering")
 
 # ----------------- Validate AOI Coverage -----------------
 logger.info("Validating AOI coverage...")
-
-# Create union of all selected item footprints
 selected_footprints = []
 for item in signed_items:
     try:
@@ -146,10 +141,8 @@ if not selected_footprints:
     logger.error("No valid footprints found from selected items!")
     raise ValueError("No valid footprints found from selected items!")
 
-# Union of all selected footprints
 combined_footprint = unary_union(selected_footprints)
 
-# Check coverage
 aoi_area = aoi_geom.area
 covered_area = aoi_geom.intersection(combined_footprint).area
 coverage_percentage = (covered_area / aoi_area) * 100
@@ -166,7 +159,6 @@ if coverage_percentage < MIN_COVERAGE_THRESHOLD:
 else:
     logger.info("✓ AOI coverage validation passed - proceeding with processing")
 
-# Print processing baseline summary for selected items
 logger.info("=== SELECTED ITEMS SUMMARY ===")
 baseline_counts = {}
 correction_needed_count = 0
@@ -184,7 +176,6 @@ for it in signed_items:
 logger.info(f"Processing Baseline Distribution: {baseline_counts}")
 logger.info(f"Items requiring radiometric offset correction: {correction_needed_count}/{len(signed_items)}")
 
-# Check if all items have the same processing baseline
 if len(baseline_counts) > 1:
     logger.warning("WARNING: Items have different processing baselines! This may affect ML model consistency.")
     if correction_needed_count > 0 and correction_needed_count < len(signed_items):
@@ -208,7 +199,7 @@ selected_items = list(unique_items.values())
 logger.info("Processing stack...")
 
 try:
-    # Check for multiple CRS scenario
+    # Check for multiple CRS
     crs_set = set()
     
     for item in signed_items:
@@ -222,24 +213,20 @@ try:
     
     logger.info(f"Found CRS codes: {sorted(crs_set)}")
     
-    # Choose target CRS
     if len(crs_set) > 1:
-        # Multiple CRS detected - use the last one from the sorted list
         target_epsg = sorted(crs_set)[-1]
         target_crs = f"EPSG:{target_epsg}"
         logger.warning(f"Multiple CRS detected: {sorted(crs_set)}")
         logger.info(f"Using CRS: {target_crs}")
         
-        # Use specified EPSG
         stack = stackstac.stack(
             signed_items,
             assets=BAND_ASSETS,
-            resolution=RESOLUTION,  # Use 10m directly
+            resolution=RESOLUTION,
             chunksize=CHUNK_SIZE,
             epsg=target_epsg
         ).astype("float32")
     else:
-        # Single CRS - let stackstac handle automatically
         target_epsg = list(crs_set)[0] if crs_set else None
         target_crs = f"EPSG:{target_epsg}" if target_epsg else None
         logger.info(f"Using native CRS: {target_crs}")
@@ -247,44 +234,39 @@ try:
         stack = stackstac.stack(
             signed_items,
             assets=BAND_ASSETS,
-            resolution=RESOLUTION,  # Use 10m directly in native CRS
+            resolution=RESOLUTION,
             chunksize=CHUNK_SIZE
         ).astype("float32")
 
     logger.info(f"Stack shape: {stack.shape}")
     logger.info(f"Stack dimensions: {stack.dims}")
 
-    # ----------------- Apply Radiometric Offset Correction -----------------
-    # Check if any items require correction (for metadata purposes)
+    # ----------------- Apply Radiometric Offset Correction and Convert to SR -----------------
     requires_correction = any(get_processing_baseline_info(item)['requires_offset_correction'] 
                              for item in signed_items)
     
-    # Step 1: Apply BOA offset correction if required
+    # Formula: Reflectance = (DN - BOA_ADD_OFFSET) / 10000
     if requires_correction:
-        logger.info("Applying BOA offset correction to the stack...")
-        # Apply the BOA offset correction: DN_corrected = DN + BOA_ADD_OFFSET
-        stack = stack + BOA_ADD_OFFSET_PB04
-        # Clip negative values to 0 (same as original function behavior)
-        stack = stack.where(stack >= 0, 0)
-    
-    # Step 2: Apply quantification (convert to surface reflectance) if TO_SR is True
-    if TO_SR:
+        logger.info("Applying BOA offset correction and converting to Surface Reflectance...")
+        stack = (stack + BOA_ADD_OFFSET_PB04) / QUANTIFICATION_VALUE
+        data_type_info = "SR clipped [0,1] (BOA offset corrected)"
+    else:
         logger.info("Converting Raw Digital Numbers to Surface Reflectance...")
         stack = stack / QUANTIFICATION_VALUE
-        data_type_info = "SR (BOA offset corrected)" if requires_correction else "SR"
-    else:
-        logger.info("Keeping Data as Raw Digital Numbers")
-        data_type_info = "RAW DN (BOA offset corrected)" if requires_correction else "RAW DN"
+        data_type_info = "SR clipped [0,1]"
+    
+    logger.info("Clipping surface reflectance values to [0,1] range...")
+    stack = stack.clip(0, 1)
+
+    # Clip negative values to 0 
+    stack = stack.where(stack >= 0, 0)
     
     stack = stack.where(stack != 0, np.nan)
 
     # ----------------- Median mosaic -----------------
     logger.info("Computing median mosaic...")
-    
-    # Use the target CRS we determined during stack creation
     mosaic_crs = target_crs
     if mosaic_crs is None:
-        # Fallback to reading from stack if target_crs wasn't set
         mosaic_crs = stack.rio.crs
         if mosaic_crs is None:
             with rasterio.open(signed_items[0].assets["B02"].href) as src:
@@ -297,7 +279,6 @@ try:
     if 'band' in mosaic_xr.dims and len(mosaic_xr.coords['band']) == len(BAND_ASSETS):
         mosaic_xr = mosaic_xr.assign_coords(band=BAND_ASSETS)
 
-    # Ensure mosaic_crs is a proper CRS object for rioxarray
     if isinstance(mosaic_crs, str):
         from rasterio.crs import CRS
         mosaic_crs_obj = CRS.from_string(mosaic_crs)
@@ -313,7 +294,6 @@ try:
     logger.info(f"Clipping bounds in {mosaic_crs}: {clip_bounds}")
     logger.info(f"Mosaic extent - X: {mosaic_xr.x.min().values} to {mosaic_xr.x.max().values}, Y: {mosaic_xr.y.min().values} to {mosaic_xr.y.max().values}")
     
-    # Check if bounds are valid before clipping
     x_range = clip_bounds[2] - clip_bounds[0]  # max_x - min_x
     y_range = clip_bounds[3] - clip_bounds[1]  # max_y - min_y
     
@@ -326,33 +306,35 @@ try:
         except Exception as e:
             logger.warning(f"Clipping failed: {e}. Proceeding without clipping.")
 
-    # Clear intermediate variables to free memory
     del stack
     gc.collect()
 
     # ----------------- Save raster -----------------
     output_file = os.path.join(OUTPUT_DIR, f"S2_{YEAR}.tif")
-    
-    # Reproject to EPSG:4326 for final output
     logger.info("Reprojecting to EPSG:4326...")
     mosaic_wgs = mosaic_xr.rio.reproject(
         "EPSG:4326",
         resampling=RESAMPLING_METHOD,
-        nodata=np.nan
+        nodata=0 
     )
 
-    # update metadata
     mosaic_wgs.attrs = {
-        "S2_BANDS": ", ".join(BAND_ASSETS),
-        "BOA_OFFSET_APPLIED": str(requires_correction),
-        "SURFACE_REFLECTANCE": str(TO_SR),
+        "BANDS_USED": ", ".join(BAND_ASSETS),
         "DATA_RANGE": data_type_info
     }
 
-    logger.info(f"Saving to {output_file}...")
-    mosaic_wgs.rio.to_raster(output_file, compress=COMPRESSION, nodata=0, tiled=True, BIGTIFF="YES")
+    mosaic_wgs = mosaic_wgs.where(~np.isnan(mosaic_wgs), 0)
 
-    # Clean up
+    logger.info(print(f"Min and max values in the final output: {mosaic_wgs.min().values} to {mosaic_wgs.max().values}"))
+    logger.info(f"Saving to {output_file}...")
+    
+    mosaic_wgs.rio.to_raster(
+        output_file, 
+        driver="COG",  
+        compress=COMPRESSION, 
+        BIGTIFF="YES"
+    )
+
     del mosaic_xr, mosaic_wgs
     gc.collect()
 
