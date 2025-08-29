@@ -12,32 +12,12 @@ from rasterio.warp import transform_bounds
 
 def create_reference(sentinel_raster, ghsl, duas, output):
     """
-    Memory-optimized version that uses a Sentinel-2 raster as the AOI reference for perfect alignment.
-    
     This script processes geospatial data to create a reference label raster with three classes:
-
     1. Built-up areas based on GHSL built-up fraction data.
     2. Locations of DUAs (Deprived Urban Areas), represented as polygons.
     3. Non Built-up areas where neither condition is met.
 
     The output raster will have the same extent, resolution, and CRS as the input Sentinel-2 raster.
-
-    Steps:
-    - Reads the Sentinel-2 raster to get reference extent, resolution, and CRS.
-    - Reads the DUAs GeoJSON file and reprojects to match Sentinel-2 CRS.
-    - Clips and reprojects GHSL raster to align with Sentinel-2 grid.
-    - Binarizes the raster: values > 15 are classified as built-up, others as background.
-    - Rasterizes the DUAs polygons as a separate class.
-    - Combines the rasterized DUAs with the binary raster to create three classes.
-    - Saves the resulting reference label raster to the specified output file.
-
-    Inputs:
-    - Sentinel-2 raster file (used as spatial reference for alignment).
-    - GHSL built-up fraction raster file.
-    - DUAs GeoJSON file (Deprived Urban Areas).
-
-    Output:
-    - A GeoTIFF file containing the reference label raster aligned with Sentinel-2.
 
     Arguments:
     - `--sentinel`: Path to the Sentinel-2 raster file (spatial reference).
@@ -68,8 +48,6 @@ def create_reference(sentinel_raster, ghsl, duas, output):
     print(f"Target raster properties:")
     print(f"  Shape: {sentinel.shape}")
     print(f"  CRS: {target_crs}")
-    print(f"  Bounds: {target_bounds}")
-    print(f"  Transform: {target_transform}")
     
     # We only need the spatial info, so free the data
     del sentinel
@@ -84,32 +62,26 @@ def create_reference(sentinel_raster, ghsl, duas, output):
         duas = duas.to_crs(target_crs)
 
     print("Opening GHSL raster...")
-    # Use smaller chunks for better memory management
     raster = rioxarray.open_rasterio(ghsl, chunks={"x": 512, "y": 512})
     
-    print(f"Original GHSL raster shape: {raster.shape}")
-    print(f"Original GHSL raster CRS: {raster.rio.crs}")
+    print(f"GHSL raster shape: {raster.shape}")
+    print(f"GHSL raster CRS: {raster.rio.crs}")
     
     # If GHSL raster is in different CRS, transform bounds first
     if str(raster.rio.crs) != str(target_crs):
-        # Transform target bounds to GHSL CRS for clipping
         ghsl_bounds = transform_bounds(
             target_crs, 
             raster.rio.crs, 
             *target_bounds
         )
-        print(f"Target bounds in GHSL CRS: {ghsl_bounds}")
         
-        # Clip GHSL raster to target area in its native CRS
         print("Clipping GHSL raster to target bounds...")
         clipped_raster = raster.rio.clip_box(*ghsl_bounds)
-        print(f"Clipped GHSL raster shape: {clipped_raster.shape}")
         
         # Free memory
         del raster
         gc.collect()
 
-        # Reproject clipped GHSL to match Sentinel grid exactly
         print("Reprojecting GHSL raster to match Sentinel grid...")
         aligned_raster = clipped_raster.rio.reproject(
             target_crs,
@@ -117,7 +89,6 @@ def create_reference(sentinel_raster, ghsl, duas, output):
             transform=target_transform
         )
     else:
-        # If already in same CRS, just clip and resample to match grid
         print("Clipping and resampling GHSL raster to match Sentinel grid...")
         aligned_raster = raster.rio.clip_box(*target_bounds).rio.reproject(
             target_crs,
@@ -133,15 +104,9 @@ def create_reference(sentinel_raster, ghsl, duas, output):
     gc.collect()
 
     print("Binarizing the GHSL raster (values > 15 -> 1, values <= 15 -> 0)...")
-    # Handle nodata values explicitly - set them to 0
-    print("Setting nodata values to 0...")
     aligned_raster = aligned_raster.fillna(0)
-    
-    # Process in chunks to avoid memory issues
     binary_raster = aligned_raster.where(aligned_raster > 15, 0)
     binary_raster = binary_raster.where(binary_raster == 0, 1)
-    
-    print("Computing binary raster...")
     binary_raster = binary_raster.compute()
     
     # Free memory
@@ -165,26 +130,18 @@ def create_reference(sentinel_raster, ghsl, duas, output):
             all_touched=False
         )
 
-    print("Combining binary raster with DUA mask...")
-    # Overlay the polygon mask onto the binary raster
     binary_raster.values[0] = np.where(polygon_mask > 0, polygon_mask, binary_raster.values[0])
-    
-    # Ensure all values are within valid range [0, 1, 2] and convert any invalid values to 0
     binary_raster.values[0] = np.clip(binary_raster.values[0], 0, 2)
     
     # Free memory
     del polygon_mask
     gc.collect()
 
-    print(f"Saving reference mask to {output}...")
-    # Ensure nodata values are set to 0 before saving and explicitly set nodata to None
+    print(f"Saving reference mask...")
     binary_raster = binary_raster.fillna(0)
-    
-    # Set the nodata value to None to prevent 255 from being used as nodata
     binary_raster.rio.write_nodata(None, inplace=True)
-    
     binary_raster.rio.to_raster(output, compress="LZW", dtype="uint8")
-    print(f"Reference mask saved to {output}")
+    print(f"Processing complete. Output saved to {output}")
     
     # Print some statistics
     unique_values, counts = np.unique(binary_raster.values[0], return_counts=True)
