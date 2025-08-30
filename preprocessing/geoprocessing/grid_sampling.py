@@ -1,15 +1,19 @@
 """
-create_stratified_grid.py
+grid_sampling.py
 
-Creates a stratified sampling grid with:
-- Consecutive but randomized IDs to break spatial patterns
-- Proportional allocation to train/val/test sets
-- Flags for patches containing class 2
-- Preservation of class distributions
-- Class 2 inclusion if ≥X% pixels in patch are class 2
+This module creates a stratified sampling grid from labelled reference raster data.
+It generates grid patches, assigns class labels based on raster values, performs stratified train/val/test splits,
+and saves the resulting grid as a GeoJSON file.
+
+Functions:
+    - create_grid_with_ids: Generates grid cells and assigns class labels.
+    - assign_randomized_ids: Randomizes patch IDs for unbiased sampling.
+    - stratified_split: Splits the grid into train/val/test sets based on stratification.
+    - print_class_distribution: Prints class distribution statistics.
+    - main: Command-line interface for running the grid sampling process.
 
 Usage:
-    python create_stratified_grid.py --input input_raster.tif --output grid.gpkg --class2_proportion 15
+    python grid_sampling.py --input <input_raster.tif> --output <output_grid.geojson> [options]
 """
 
 import numpy as np
@@ -23,18 +27,6 @@ import pandas as pd
 import warnings
 
 def create_grid_with_ids(raster_path: str, patch_size: int = 128, class2_proportion: float = 15) -> gpd.GeoDataFrame:
-    """
-    Creates a grid with consecutive IDs, dominant class label,
-    class 2 presence flag, and class count histogram per patch.
-    
-    Args:
-        raster_path: Path to input raster
-        patch_size: Size of grid cells in pixels
-        class2_proportion: Percentage of class 2 pixels for inclusion in stratification
-        
-    Returns:
-        GeoDataFrame with geometry, temp_id, class, has_class_2, class_counts, and strat_class
-    """
     with rasterio.open(raster_path) as src:
         height, width = src.shape
         crs = src.crs
@@ -70,29 +62,19 @@ def create_grid_with_ids(raster_path: str, patch_size: int = 128, class2_proport
                     dominant_class = classes[np.argmax(counts)]
                     class_2_pct = class_count_dict.get(2, 0) / total
 
-                    grid.at[idx, 'class'] = dominant_class
+                    grid.at[idx, 'class'] = int(dominant_class)
                     grid.at[idx, 'has_class_2'] = 2 in class_count_dict
-                    grid.at[idx, 'class_counts'] = class_count_dict
+                    grid.at[idx, 'class_counts'] = {int(k): int(v) for k, v in class_count_dict.items()}
                     
                     # Assign stratification class: 2 if ≥class2_proportion of class 2, else dominant class
                     if class_2_pct >= class2_proportion / 100:
                         grid.at[idx, 'strat_class'] = 2
                     else:
-                        grid.at[idx, 'strat_class'] = dominant_class
+                        grid.at[idx, 'strat_class'] = int(dominant_class)
 
         return grid[grid['class'] != -1]  # Remove empty patches
 
 def assign_randomized_ids(grid: gpd.GeoDataFrame, random_seed: int = None) -> gpd.GeoDataFrame:
-    """
-    Assigns randomized consecutive IDs while preserving class distribution.
-    
-    Args:
-        grid: GeoDataFrame with patches
-        random_seed: Optional random seed
-        
-    Returns:
-        GeoDataFrame with new patch_id column
-    """
     if random_seed is not None:
         random.seed(random_seed)
     
@@ -108,17 +90,6 @@ def stratified_split(
     stratify_col: str = 'strat_class',
     splits: tuple = (0.7, 0.15, 0.15)
 ) -> gpd.GeoDataFrame:
-    """
-    Splits grid into stratified sets using a given column.
-    
-    Args:
-        grid: Input GeoDataFrame
-        stratify_col: Column to stratify by (e.g. 'strat_class')
-        splits: Train/val/test proportions
-        
-    Returns:
-        GeoDataFrame with set assignments
-    """
     if not np.isclose(sum(splits), 1.0):
         raise ValueError("Split proportions must sum to 1.0")
     
