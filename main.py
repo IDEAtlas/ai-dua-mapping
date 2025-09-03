@@ -220,7 +220,7 @@ elif args.stage == "test":
     
     model.load_weights(weight)
 
-    test_images = [dl.load_data(os.path.join(dir, 'train'), h, w, input) for input in inputs]
+    test_images = [dl.load_data(os.path.join(dir, 'test'), h, w, input) for input in inputs]
     if len(inputs) == 1:
         test_images = test_images[0]
 
