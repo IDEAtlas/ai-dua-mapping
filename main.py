@@ -255,6 +255,10 @@ elif args.stage == "infer":
     
     model.load_weights(weight)
     aoi_path = f"{config.AOI}/{city}_aoi.geojson"
+
+    if not os.path.exists(config.PREDICTION_PATH):
+        os.makedirs(config.PREDICTION_PATH)
+
     save_path = f'{config.PREDICTION_PATH}/{city}_{inputs_str}_{model.name}_{year}.tif'
     ideatlas.full_inference_mbcnn(config.N_CLASSES, input_rasters, model, save_path, aoi_path, batch_size=32)
     # ideatlas.slide_window_inference(config.N_CLASSES, s2_path, model, save_path)
