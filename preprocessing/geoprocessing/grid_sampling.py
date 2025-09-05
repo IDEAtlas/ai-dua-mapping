@@ -153,6 +153,41 @@ def main():
     grid.to_file(args.output, driver='GeoJSON')
     print(f"✅ Done. Created {len(grid)} patches.")
 
+def generate_grid_sampling(
+    input_raster: str,
+    output_geojson: str,
+    patch_size: int = 128,
+    splits: tuple = (0.7, 0.15, 0.15),
+    seed: int = None,
+    class2_proportion: float = 1
+) -> str:
+    """
+    Run the grid sampling process programmatically.
+
+    Args:
+        input_raster (str): Path to input reference raster.
+        output_geojson (str): Path to output GeoJSON grid.
+        patch_size (int): Patch size in pixels.
+        splits (tuple): Train/val/test split proportions.
+        seed (int): Random seed for reproducibility.
+        class2_proportion (float): Proportion of class 2 pixels (in %) for stratification.
+    """
+    print("Creating initial grid...")
+    grid = create_grid_with_ids(input_raster, patch_size, class2_proportion)
+    
+    print("Assigning randomized IDs...")
+    grid = assign_randomized_ids(grid, seed)
+
+    print("Performing stratified split using enhanced class label (≥{:.1f}% class 2)...".format(class2_proportion))
+    grid = stratified_split(grid, stratify_col='strat_class', splits=splits)
+    
+    print_class_distribution(grid)
+
+    print(f"\nSaving to {output_geojson}")
+    grid.to_file(output_geojson, driver='GeoJSON')
+    print(f"✅ Done. Created {len(grid)} patches.")
+    return output_geojson
+
 if __name__ == '__main__':
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

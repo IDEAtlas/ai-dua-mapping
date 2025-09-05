@@ -3,12 +3,15 @@ import requests
 import zipfile
 import geopandas as gpd
 import shutil
+import weakref
 
 # Source for the links: https://human-settlement.emergency.copernicus.eu/download.php
 
 class GHSLDownloader:
+    # Initialize with temp directory for downloads and unzipping
     def __init__(self, temp_dir: str = "/tmp/ghsl", delete_on_destruct: bool = True):
         self.temp_dir = temp_dir
+        self.delete_on_destruct = delete_on_destruct
         os.makedirs(self.temp_dir, exist_ok=True)
         self.shp_url = "https://ghsl.jrc.ec.europa.eu/download/GHSL_data_54009_shapefile.zip"
         self.delete_on_destruct = delete_on_destruct
@@ -31,14 +34,24 @@ class GHSLDownloader:
         print("---")
         print(f"Unzipped GHSL shapefile to {self.shapefile_dir}")
 
-    def __del__(self):
-        try:
-            if os.path.exists(self.temp_dir) and self.delete_on_destruct:
-                shutil.rmtree(self.temp_dir)
-                print(f"Temporary directory {self.temp_dir} deleted.")
-        except Exception as e:
-            print(f"Error deleting temporary directory {self.temp_dir}: {e}")
+        # Register safe cleanup if requested
+        if delete_on_destruct:
+            self._finalizer = weakref.finalize(
+                self,
+                self._cleanup_and_log,
+                temp_dir  # capture as argument (not self!)
+            )
 
+    # Destructor to clean up temp files
+    @staticmethod
+    def _cleanup_and_log(temp_dir: str):
+        """Safely remove the temporary directory and print a message."""
+        import os, shutil  # import locally to avoid NoneType issues at shutdown
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+            print(f"Temporary directory {temp_dir} deleted.")
+
+    # Get intersecting tile codes
     def get_intersecting_tile_codes(self, aoi_geojson: str) -> list:
         if not self.shapefile_dir:
             raise RuntimeError("Shapefile directory not set. Unzip shapefile first.")

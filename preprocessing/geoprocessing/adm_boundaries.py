@@ -2,7 +2,7 @@ import requests
 import os
 import json
 
-def fetch_and_save_adm_borders_geojson(q, output_folder, output_file=None):
+def fetch_and_save_adm_borders_geojson(q, output_folder, output_file=None) -> str:
     r = requests.get(
         "https://nominatim.openstreetmap.org/search",
         params={"q": q, "format": "json", "polygon_geojson": 1, "limit": 1},
@@ -24,7 +24,9 @@ def fetch_and_save_adm_borders_geojson(q, output_folder, output_file=None):
             json.dump(geojson, f)
         print(f"Saved to {output_path}")
     else:
-        print("Not found")
+        raise ValueError(f"No results found for query: {q}")
+
+    return output_path
 
 # Example usage
 # fetch_and_save_adm_borders_geojson("Tegucigalpa, Honduras", "/data/raw/aoi/")
