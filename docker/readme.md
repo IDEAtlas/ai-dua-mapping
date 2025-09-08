@@ -1,18 +1,27 @@
-#### Build the docker image
+⚡ Quickstart
 
-- docker build -f Dockerfile.torch-geoai -t torch-geoai .
-- docker build -f Dockerfile.tf-geoai -t tf-geoai .
-- docker build -f Dockerfile.terrakit -t terrakit .
+Assuming you already have a project folder on your computer with data, notebooks, or scripts:
 
-#### Run the docker image
+### TensorFlow Geo-AI
 
-- docker run -d --name torch-geoai --gpus all -v /data:/data torch-geoai tail -f /dev/null
-- docker run -d --name tf-geoai --gpus all -v /data:/data tf-geoai tail -f /dev/null
-- docker run -d --name terrakit  -v /data:/data -v /eodata:/eodata terrakit tail -f /dev/null
+```
+docker compose --profile tf up -d --build
+docker exec -it geoai-tf bash
+```
 
-#### Interact with the docker container
+### PyTorch Geo-AI
 
-- docker exec -it torch-geoai bash
-- docker exec -it tf-geoai bash
-- docker exec -it terrakit bash
+```
+docker compose --profile torch up -d --build
+docker exec -it geoai-torch bash
+```
 
+Your project folder is mounted automatically at /data inside the container.
+
+Any changes or outputs inside /data persist on your host system.
+
+Stop all containers when done:
+
+```
+docker compose down
+```

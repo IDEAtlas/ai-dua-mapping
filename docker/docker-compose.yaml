@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+
+  comfyui:
+    build:
+      context: ./ComfyUI        # Local folder containing your ComfyUI Dockerfile
+      dockerfile: Dockerfile
+    container_name: comfyui
+    ports:
+      - "8188:8188"
+    volumes:
+      - ./models:/app/models
+    command: python main.py --listen 0.0.0.0 --disable-cuda-malloc
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:cuda
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    volumes:
+      - ./open-webui:/app/backend/data
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: always
+
+  searxng:
+    build:
+      context: ./searxng      # Local folder with searxng Dockerfile
+    container_name: searxng
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./searxng_data:/etc/searxng
+    restart: always
+
+volumes:
+  ollama:
+  open-webui:
