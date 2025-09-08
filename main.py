@@ -42,7 +42,7 @@ def print_info(name, data):
 batch = args.batch if args.batch else config.BATCH_SIZE
 epochs = args.epochs if args.epochs else config.EPOCHS
 city = args.city
-dir = config.DATA_PATH + city + '/'
+dir = os.path.join(config.DATA_PATH, city)
 
 
 inputs = config.DATASET
@@ -65,15 +65,15 @@ if args.stage == "train":
     print('Training model on', city.capitalize(), 'dataset')
     print('Input: ', inputs)
 
-    train_images = [dl.load_data(dir + 'train', h, w, input) for input in inputs]
-    val_images = [dl.load_data(dir + 'val', h, w, input) for input in inputs]
-    
+    train_images = [dl.load_data(os.path.join(dir, 'train'), h, w, input) for input in inputs]
+    val_images = [dl.load_data(os.path.join(dir, 'val'), h, w, input) for input in inputs]
+
     if len(inputs) == 1:
         train_images = train_images[0]
         val_images = val_images[0]
 
-    train_label = dl.load_data(dir + 'train', h, w, 'RF', config.N_CLASSES)
-    val_label = dl.load_data(dir + 'val', h, w, 'RF', config.N_CLASSES)
+    train_label = dl.load_data(os.path.join(dir, 'train'), h, w, 'RF', config.N_CLASSES)
+    val_label = dl.load_data(os.path.join(dir, 'val'), h, w, 'RF', config.N_CLASSES)
 
     print_info("Train Images", train_images)
     print_info("Validation Images", val_images)
@@ -125,10 +125,20 @@ if args.stage == "train":
     #     }
     # )
 
+    # Check if CHECKPOINT_PATH exists and creates it if it doesn't
+    if not os.path.exists(config.CHECKPOINT_PATH):
+        os.makedirs(config.CHECKPOINT_PATH)
+
+    # Remove old checkpoint files
     for i in os.listdir(config.CHECKPOINT_PATH):
         if i.endswith('.h5'):
             os.remove(os.path.join(config.CHECKPOINT_PATH, i))
 
+    # Check if LOG_PATH exists and creates it if it doesn't
+    if not os.path.exists(config.LOG_PATH):
+        os.makedirs(config.LOG_PATH)
+
+    # Remove old log files
     for j in os.listdir(config.LOG_PATH):
         if j.endswith('.csv'):
             os.remove(os.path.join(config.LOG_PATH, j))
@@ -202,13 +212,19 @@ elif args.stage == "test":
     weight = args.weight if args.weight else (f'./{config.CHECKPOINT_PATH}/{city}.{inputs_str}.{model.name}.weights.h5')
     # weight = './checkpoint/best/buenos_aires_s2_morph_mbcnn.weights.h5'
     print(f'Model weight: {weight}')
+
+    # Raise an exception if the weights file does not exist
+    if not os.path.exists(weight):
+        raise FileNotFoundError(f"Weight file not found: {weight}\n"
+                            "Check --weight, config.CHECKPOINT_PATH, inputs in config.json, or run training to create this file.")
+    
     model.load_weights(weight)
 
-    test_images = [dl.load_data(dir + 'test', h, w, input) for input in inputs]
+    test_images = [dl.load_data(os.path.join(dir, 'test'), h, w, input) for input in inputs]
     if len(inputs) == 1:
         test_images = test_images[0]
 
-    test_label = dl.load_data(dir + 'test', h, w, 'RF', config.N_CLASSES)
+    test_label = dl.load_data(os.path.join(dir, 'test'), h, w, 'RF', config.N_CLASSES)
 
     print_info("Test Images", test_images)
     print_info("Test Label", test_label)
@@ -231,8 +247,18 @@ elif args.stage == "infer":
 
     model = models.select_model(args.model, config)
     weight = args.weight if args.weight else (f'./{config.CHECKPOINT_PATH}/{city}.{inputs_str}.{model.name}.weights.h5')
+    
+    # Raise an exception if the weights file does not exist
+    if not os.path.exists(weight):
+        raise FileNotFoundError(f"Weight file not found: {weight}\n"
+                            "Check --weight, config.CHECKPOINT_PATH, inputs in config.json, or run training to create this file.")
+    
     model.load_weights(weight)
     aoi_path = f"{config.AOI}/{city}_aoi.geojson"
+
+    if not os.path.exists(config.PREDICTION_PATH):
+        os.makedirs(config.PREDICTION_PATH)
+
     save_path = f'{config.PREDICTION_PATH}/{city}_{inputs_str}_{model.name}_{year}.tif'
     ideatlas.full_inference_mbcnn(config.N_CLASSES, input_rasters, model, save_path, aoi_path, batch_size=32)
     # ideatlas.slide_window_inference(config.N_CLASSES, s2_path, model, save_path)

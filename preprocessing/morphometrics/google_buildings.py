@@ -156,6 +156,38 @@ def download_buildings_to_memory(aoi: gpd.GeoDataFrame, num_workers: int = 4):
         return None
 
 
+def download_google_open_buildings(aoi_path: str, output_path: str, format_type: str = 'gpkg', num_workers: int = 4):
+    """
+    Download Google Open Buildings v3 data for a given AOI and save to disk.
+
+    Args:
+        aoi_path (str): Path to AOI GeoJSON file.
+        output_path (str): Output file path (with or without extension).
+        format_type (str): Output format ('geojson', 'gpkg', 'shp', 'parquet').
+        num_workers (int): Number of parallel workers.
+    """
+    logger.info("Starting Google Open Buildings v3 download (programmatic call)")
+    logger.info(f"Configuration: format={format_type}, workers={num_workers}")
+
+    aoi = load_polygon_from_geojson(aoi_path)
+    combined_df = download_buildings_to_memory(aoi, num_workers)
+
+    if combined_df is not None and len(combined_df) > 0:
+        extensions = {'geojson': '.geojson', 'gpkg': '.gpkg', 'shp': '.shp', 'parquet': '.parquet'}
+        # Only add extension if not already present
+        ext = extensions[format_type]
+        if not output_path.endswith(ext):
+            final_output_path = output_path + ext
+        else:
+            final_output_path = output_path
+        convert_dataframe_to_geospatial(combined_df, final_output_path, format_type)
+        logger.info("Process completed successfully")
+        return final_output_path
+    else:
+        logger.error("No buildings found - process completed with no output")
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description='Download Google Open Buildings v3 data')
     parser.add_argument('--aoi', required=True, help='AOI file path')
@@ -169,16 +201,12 @@ def main():
     logger.info("Starting Google Open Buildings v3 download")
     logger.info(f"Configuration: format={args.format}, workers={args.workers}")
     
-    aoi = load_polygon_from_geojson(args.aoi)
-    combined_df = download_buildings_to_memory(aoi, args.workers)
-    
-    if combined_df is not None and len(combined_df) > 0:
-        extensions = {'geojson': '.geojson', 'gpkg': '.gpkg', 'shp': '.shp', 'parquet': '.parquet'}
-        final_output_path = args.output + extensions[args.format]
-        convert_dataframe_to_geospatial(combined_df, final_output_path, args.format)
-        logger.info("Process completed successfully")
-    else:
-        logger.error("No buildings found - process completed with no output")
+    download_google_open_buildings(
+        aoi_path=args.aoi,
+        output_path=args.output,
+        format_type=args.format,
+        num_workers=args.workers
+    )
 
 
 if __name__ == "__main__":

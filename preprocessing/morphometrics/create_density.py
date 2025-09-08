@@ -17,7 +17,7 @@ def georrefData(data, filename, metadata):
 	ds = None
 
 
-def CreateDensity(sentinelImg, DensityShape, saveadd):
+def CreateDensity(sentinelImg, DensityShape, saveadd) -> str:
     """
     Create building density raster from sentinel image and building shapefile.
     """
@@ -71,6 +71,7 @@ def CreateDensity(sentinelImg, DensityShape, saveadd):
     print(f"Density range: {density_min:.2f} - {density_max:.2f}, normalized to [0, 1]")
     georrefData(density, os.path.join(saveadd), sentinelImg)
     print(f"Density raster saved to {saveadd}")
+    return os.path.join(saveadd)
 
 if __name__ == "__main__":
     # Inputs: 
@@ -78,9 +79,9 @@ if __name__ == "__main__":
     # 2) The buildings/morphometrics shapefile
     # 3) address to save the rasters with the morphometrics
 
-    city = 'jakarta'
+    city = 'guatemala_city'
     basedir = '/data/raw/'
-    year = 2023
+    year = 2024
 
     CreateDensity(os.path.join(basedir, "sentinel", city, f'S2_{year}.tif'), 
                   os.path.join(basedir, f'buildings/{city}_bldg.gpkg'), 
