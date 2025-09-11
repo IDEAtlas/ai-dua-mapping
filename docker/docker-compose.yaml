@@ -1,59 +1,68 @@
-version: "3.8"
+name: geo-ai-stack
 
 services:
-
-  comfyui:
+  geoai-tf:
     build:
-      context: ./ComfyUI        # Local folder containing your ComfyUI Dockerfile
-      dockerfile: Dockerfile
-    container_name: comfyui
-    ports:
-      - "8188:8188"
-    volumes:
-      - ./models:/app/models
-    command: python main.py --listen 0.0.0.0 --disable-cuda-malloc
+      context: .
+      dockerfile: Dockerfile.tf
+    image: geoai-tf
+    container_name: geoai-tf
+    profiles: ["tf"]
+    runtime: nvidia
     deploy:
       resources:
         reservations:
           devices:
-            - capabilities: [gpu]
-
-  openwebui:
-    image: ghcr.io/open-webui/open-webui:cuda
-    container_name: open-webui
-    ports:
-      - "3000:8080"
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     volumes:
-      - ./open-webui:/app/backend/data
-    runtime: nvidia
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: always
+      - /data:/data
+    tty: true
+    stdin_open: true
 
-  ollama:
-    image: ollama/ollama
-    container_name: ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama:/root/.ollama
-    runtime: nvidia
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-    restart: always
-
-  searxng:
+  geoai-torch:
     build:
-      context: ./searxng      # Local folder with searxng Dockerfile
-    container_name: searxng
-    ports:
-      - "8080:8080"
+      context: .
+      dockerfile: Dockerfile.torch
+    image: geoai-torch
+    container_name: geoai-torch
+    profiles: ["torch"]
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     volumes:
-      - ./searxng_data:/etc/searxng
-    restart: always
+      - /data:/data
+    tty: true
+    stdin_open: true
 
-volumes:
-  ollama:
-  open-webui:
+  terrakit:
+    build:
+      context: .
+      dockerfile: Dockerfile.terrakit
+    image: terrakit
+    container_name: terrakit
+    profiles: ["terrakit"]
+    volumes:
+      - /data:/data
+      - /eodata:/eodata
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          memory: 8G
+    environment:
+      - _JAVA_OPTIONS=-Xmx24G -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MaxPermSize=512M
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    tty: true
+    stdin_open: true
+

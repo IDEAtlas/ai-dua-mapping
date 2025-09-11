@@ -18,8 +18,8 @@ RUN python -m pip install --upgrade pip setuptools wheel
 
 # Geospatial Python packages
 RUN pip install --no-cache-dir \
-    geopandas==0.13.2 \
-    rioxarray \
+    geopandas fiona==1.9.6 \
+    rioxarray s2geometry \
     dask xarray rich \
     pystac-client planetary-computer stackstac \
     osmnx momepy

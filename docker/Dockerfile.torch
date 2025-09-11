@@ -1,34 +1,39 @@
 # geoai-torch-gpu
-FROM pytorch/pytorch:2.2.2-cuda12.1-cudnn8-runtime
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 
-# System dependencies for geospatial libraries
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-dev \
     gdal-bin libgdal-dev \
     proj-bin libproj-dev \
     libspatialindex-dev \
     libgl1 libglib2.0-0 \
     curl git wget \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m pip install --upgrade pip setuptools wheel
+# Set GDAL environment variables
+ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
+ENV C_INCLUDE_PATH=/usr/include/gdal
 
-# Geospatial Python packages
-RUN pip install --no-cache-dir \
-    geopandas==0.13.2 \
-    rioxarray \
-    dask xarray rich \
-    pystac-client planetary-computer stackstac \
-    osmnx momepy
-
-# Common ML/AI packages
-RUN pip install --no-cache-dir 'numpy<2' \
-    pandas scipy scikit-learn seaborn statsmodels \
-    matplotlib tqdm pillow opencv-python-headless \
-    segmentation-models-pytorch \
-    pytorch-lightning torcheval
+# Upgrade pip and install packages
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    python3 -m pip install GDAL==$(gdal-config --version) && \
+    python3 -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 && \
+    python3 -m pip install --no-cache-dir \
+        geopandas fiona==1.9.6 \
+        rioxarray \
+        dask xarray rich \
+        pystac-client planetary-computer stackstac \
+        osmnx momepy && \
+    python3 -m pip install --no-cache-dir 'numpy<2' \
+        pandas scipy scikit-learn seaborn statsmodels \
+        matplotlib tqdm pillow opencv-python-headless \
+        segmentation-models-pytorch \
+        pytorch-lightning torcheval
 
 WORKDIR /data
 CMD ["/bin/bash"]
