@@ -58,7 +58,7 @@ services:
         reservations:
           memory: 8G
     environment:
-      - _JAVA_OPTIONS=-Xmx24G -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MaxPermSize=512M
+      - _JAVA_OPTIONS=-Xmx24G -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MetaspaceSize=512M -XX:MaxMetaspaceSize=1G
     ulimits:
       memlock:
         soft: -1
