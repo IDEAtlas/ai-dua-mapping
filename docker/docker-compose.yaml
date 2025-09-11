@@ -18,6 +18,8 @@ services:
               capabilities: [gpu]
     volumes:
       - /data:/data
+    shm_size: 8g
+    ipc: host
     tty: true
     stdin_open: true
 
@@ -38,6 +40,8 @@ services:
               capabilities: [gpu]
     volumes:
       - /data:/data
+    shm_size: 8g
+    ipc: host
     tty: true
     stdin_open: true
 
