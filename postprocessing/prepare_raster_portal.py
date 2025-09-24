@@ -1,121 +1,103 @@
-
+#!/usr/bin/env python3
 import argparse
-import rasterio
-import rasterio.mask
-import rasterio.warp
-import rasterio.transform
-import fiona
+import geopandas as gpd
+import rioxarray
+from rasterio.enums import Resampling
 import numpy as np
+import os
 
 
-def shift_classes(array):
-    """
-    Shift class values in the raster.
-    - 0 → 1
-    - 1 → 2
-    - 2 → 3
-    """
-    print("Shifting class values: 0→1, 1→2, 2→3")
-    return np.where(array == 0, 1, np.where(array == 1, 2, np.where(array == 2, 3, array)))
+def process_raster(input_path, output_path, aoi=None):
+    src = rioxarray.open_rasterio(input_path)
+    print(f"Source CRS: {src.rio.crs}")
+    
+    unique_vals = np.unique(src.data)
+    print(f"Source unique values: {unique_vals}")
+    
+    # Simple check: if raster has values 0,1,2 (and no 3), it needs shifting
+    # Otherwise, it's already shifted or has different class scheme
+    needs_shift = set([0, 1, 2]).issubset(unique_vals) and 3 not in unique_vals
+    
+    print(f"Needs class shifting: {needs_shift}")
+    
+    if needs_shift:
+        # Apply class shift: 0→1, 1→2, 2→3
+        shifted = src.copy(data=((src.data + 1).astype("uint8")))
+        print(f"After shift unique values: {np.unique(shifted.data)}")
+    else:
+        shifted = src.copy()
+        print("No shift applied - using original values")
+    
+    # Set nodata to 0
+    shifted.rio.write_nodata(0, inplace=True)
+    
+    # Reproject to Web Mercator
+    shifted = shifted.rio.reproject("EPSG:3857", resampling=Resampling.mode, nodata=0)
+    print(f"After reprojection unique values: {np.unique(shifted.data)}")
 
+    # Clip to AOI if provided
+    if aoi:
+        gdf = gpd.read_file(aoi)
+        print(f"Original AOI CRS: {gdf.crs}")
+        gdf = gdf.to_crs("EPSG:3857")
+        print(f"Clipping to AOI CRS: {gdf.crs}")
+        
+        shifted = shifted.rio.clip(gdf.geometry.values, gdf.crs, all_touched=True, drop=False)
+        print(f"After clipping unique values: {np.unique(shifted.data)}")
+        shifted.rio.write_nodata(0, inplace=True)
 
-def clip(input_path, aoi, output_path, do_shift=False, resample_100m=False):
-    # Read the vector mask
-    with fiona.open(aoi, "r") as shapefile:
-        shapes = [feature["geometry"] for feature in shapefile]
-        aoi_crs = shapefile.crs
-        print(f"AOI CRS: {aoi_crs}")
+    final_values = np.unique(shifted.data)
+    print(f"Final unique values: {final_values}")
 
-    # Open raster and shift values before clipping
-
-
-
-    with rasterio.open(input_path) as src:
-        print(f"Raster CRS: {src.crs}")
-        print(f"Raster shape: {src.height} x {src.width}")
-        # Clip the raster using the vector mask
-        clipped, trans = rasterio.mask.mask(src, shapes, crop=True)
-        print(f"Clipped shape: {clipped.shape}")
-        # clipped shape: (bands, height, width)
-        band = clipped[0]
-        print(f"Unique values before shifting: {np.unique(band)}")
-        if do_shift:
-            # Only shift valid data (not nodata)
-            nodata = src.nodata
-            if nodata is not None:
-                mask = band != nodata
-            else:
-                mask = np.ones_like(band, dtype=bool)
-            shifted = band.copy()
-            shifted[mask] = shift_classes(band[mask])
-            print(f"Unique values after shifting: {np.unique(shifted)}")
-            shifted = np.asarray(shifted, dtype=np.uint8)
-        else:
-            shifted = np.asarray(band, dtype=np.uint8)
-
-    # Reproject to EPSG:3857 (Web Mercator)
-    dst_crs = 'EPSG:3857'
-    # Calculate the transform and shape for the new projection
-    dst_transform, dst_width, dst_height = rasterio.warp.calculate_default_transform(
-        src.crs, dst_crs, shifted.shape[1], shifted.shape[0], *rasterio.transform.array_bounds(shifted.shape[0], shifted.shape[1], trans)
+    # Save the main result
+    shifted.rio.to_raster(
+        output_path,
+        compress="lzw",
+        tiled=True,
+        nodata=0,
+        bigtiff="YES",
+        dtype="uint8"
     )
-    if dst_width is None or dst_height is None or dst_width == 0 or dst_height == 0:
-        raise ValueError("Reprojection failed: AOI does not overlap raster or resulted in empty output.")
-    dst_width = int(dst_width)
-    dst_height = int(dst_height)
-    out_transform = dst_transform
-    out_width = dst_width
-    out_height = dst_height
-    # If resample_100m, adjust transform and shape for 100m resolution
-    if resample_100m:
-        # 100m per pixel in EPSG:3857
-        pixel_size = 100.0
-        minx, miny, maxx, maxy = rasterio.transform.array_bounds(dst_height, dst_width, dst_transform)
-        out_width = int(np.ceil((maxx - minx) / pixel_size))
-        out_height = int(np.ceil((maxy - miny) / pixel_size))
-        out_transform = rasterio.transform.from_origin(minx, maxy, pixel_size, pixel_size)
-    # Prepare output array
-    reprojected = np.empty((out_height, out_width), dtype=np.uint8)
-    rasterio.warp.reproject(
-        source=shifted,
-        destination=reprojected,
-        src_transform=trans,
-        src_crs=src.crs,
-        dst_transform=out_transform,
-        dst_crs=dst_crs,
-        resampling=rasterio.warp.Resampling.mode
-    )
-    # Update the metadata for the output
-    meta = src.meta.copy()
-    meta.update({
-        "driver": "GTiff",
-        "height": out_height,
-        "width": out_width,
-        "transform": out_transform,
-        "dtype": "uint8",
-        "count": 1,
-        "compress": "DEFLATE",
-        "crs": dst_crs,
-        "nodata": 0,
-    })
+    print(f"Main output saved to: {output_path}")
 
-    # Save the reprojected, clipped, and shifted raster to the output file
-    with rasterio.open(output_path, "w", **meta) as dst:
-        dst.write(reprojected, 1)
-
-    print(f"Clipped and shifted raster saved to: {output_path}")
+    # If no shift was needed, also save a 100m resampled version
+    if not needs_shift:
+        base_name, ext = os.path.splitext(output_path)
+        output_100m_path = f"{base_name}_100m{ext}"
+        
+        print("Creating 100m resampled version...")
+        
+        resampled_100m = shifted.rio.reproject(
+            "EPSG:3857",
+            resolution=100,  # 100 meter resolution
+            resampling=Resampling.mode,
+            nodata=0
+        )
+        
+        resampled_100m.rio.to_raster(
+            output_100m_path,
+            compress="lzw",
+            tiled=True,
+            nodata=0,
+            bigtiff="YES",
+            dtype="uint8"
+        )
+        print(f"100m resampled version saved to: {output_100m_path}")
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("input_path", help="Path to .tif file to clip")
-    parser.add_argument("aoi", help="Path to .shp file to use as mask")
+    parser = argparse.ArgumentParser(description="Process raster: shift classes if needed and reproject to Web Mercator")
+    parser.add_argument("input_path", help="Path to input .tif file")
     parser.add_argument("output_path", help="Path to output .tif file")
-    parser.add_argument("--shift", action="store_true", help="Shift class values (0→1, 1→2, 2→3)")
-    parser.add_argument("--resample", action="store_true", help="Resample output to 100m resolution in EPSG:3857")
+    parser.add_argument("--aoi", help="AOI shapefile/GeoJSON for clipping (optional)")
+    
     args = parser.parse_args()
 
-    clip(args.input_path, args.aoi, args.output_path, do_shift=args.shift, resample_100m=args.resample)
+    process_raster(
+        input_path=args.input_path,
+        output_path=args.output_path,
+        aoi=args.aoi,
+    )
 
 
 if __name__ == "__main__":
