@@ -10,6 +10,7 @@ import planetary_computer as pc
 import stackstac
 import rioxarray
 import numpy as np
+from rasterio.enums import Resampling
 
 # Bands to download (10 m + resampled 20 m)
 BAND_ASSETS = ["B02", "B03", "B04", "B05", "B06",
@@ -146,25 +147,32 @@ def download_s2_composite(aoi, date_range, output_path,
     mosaic = mosaic.sel(band=BAND_ASSETS)
     mosaic.rio.write_crs("EPSG:4326", inplace=True)
 
-    # Save result as float32 with DEFLATE + predictor=2
+    # Save as Cloud Optimized GeoTIFF (COG) float32
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     mosaic.rio.to_raster(
         output_path,
+        driver="COG",
+        dtype="float32",
         compress='DEFLATE',
-        predictor=2
+        predictor=2,
+        tiled=True,
+        blockxsize=512,
+        blockysize=512,
+        overview_level=[2, 4, 8, 16, 32],
+        BIGTIFF="IF_SAFER"
     )
-    logger.info(f"✅ Composite saved at {output_path}")
+    logger.info(f"Composite saved as COG at {output_path}")
 
     return output_path
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Download Sentinel-2 L2A composite with automatic baseline correction")
+    parser = argparse.ArgumentParser(description="Download Sentinel-2 L2A composite with automatic baseline correction using Planetary Computer STAC API.")
     parser.add_argument("--aoi", required=True, help="Path to AOI file (shapefile or GeoJSON).")
     parser.add_argument("--start", required=True, help="Start date (YYYY-MM-DD).")
     parser.add_argument("--end", required=True, help="End date (YYYY-MM-DD).")
     parser.add_argument("--out", required=True, help="Output GeoTIFF file path.")
-    parser.add_argument("--max_cloud", type=int, default=20, help="Max cloud cover (default: 20).")
+    parser.add_argument("--max_cloud", type=float, default=10, help="Max cloud cover (default: 10).")
     parser.add_argument("--reducer", choices=["median","mean"], default="median", help="Composite method (default: median).")
     parser.add_argument("--min_coverage", type=float, default=95, help="Minimum required AOI coverage in percent (default: 95).")
     args = parser.parse_args()
