@@ -1,51 +1,33 @@
 import os
-import numpy as np
-import dask.array as da
-import geopandas as gpd
-import stackstac
-import planetary_computer as pc
-from pystac_client import Client
-import rioxarray
-import rasterio
-from rasterio.enums import Resampling
-from rasterio.warp import transform_bounds
-from pyproj import Transformer
-import warnings
+import argparse
 import logging
-from datetime import datetime
-import gc
-import xarray as xr
+import geopandas as gpd
+from shapely.geometry import shape
+from shapely.ops import unary_union
 from typing import Dict
+from pystac_client import Client
+import planetary_computer as pc
+import stackstac
+import rioxarray
+import numpy as np
+from rasterio.enums import Resampling
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+# Bands to download (10 m + resampled 20 m)
+BAND_ASSETS = ["B02", "B03", "B04", "B05", "B06",
+               "B07", "B08", "B8A", "B11", "B12"]
 
-warnings.filterwarnings("ignore")
+# Constants for baseline correction
+BOA_ADD_OFFSET_PB04 = -1000
+QUANTIFICATION_VALUE = 10000
 
-# ----------------- Configuration -----------------
-CITY = "lagos"
-BASEDIR = "/data/raw/"
-GEOJSON_FILE = os.path.join(BASEDIR, "aoi", f"{CITY}_aoi.geojson")
-YEAR = 2022
-START_DATE = f"{YEAR}-01-06"
-END_DATE = f"{YEAR}-12-18"
-MAX_CLOUD_COVER = 15
-CHUNK_SIZE = 512
-OUTPUT_DIR = os.path.join(BASEDIR, "sentinel", CITY)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-# Processing parameters
-RESOLUTION = 10
-RESAMPLING_METHOD = Resampling.bilinear
-COMPRESSION = "LZW"
-
-# Selected Sentinel-2 bands
-BAND_ASSETS = ["B02", "B03", "B04", "B05", "B06", "B07", "B08", "B8A", "B11", "B12"]
-
-# Constants for radiometric offset handling
-BOA_ADD_OFFSET_PB04 = -1000  # For PB 04.00 and later
-QUANTIFICATION_VALUE = 10000  # Standard quantification value for Sentinel-2
+# Configure logger
+logger = logging.getLogger("s2_composite")
+logger.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter("[%(levelname)s] %(message)s")
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 def get_processing_baseline_info(item) -> Dict:
     """Extract processing baseline information from STAC item"""
@@ -60,7 +42,6 @@ def get_processing_baseline_info(item) -> Dict:
         'requires_offset_correction': False
     }
     
-    # Check if this is PB 04.00 or later that requires offset correction
     try:
         if processing_baseline != 'N/A':
             baseline_version = float(processing_baseline.split('.')[0])
@@ -70,278 +51,140 @@ def get_processing_baseline_info(item) -> Dict:
     
     return info
 
-# ----------------- Load AOI -----------------
-try:
-    aoi = gpd.read_file(GEOJSON_FILE).to_crs("EPSG:4326")
-    bbox = aoi.total_bounds.tolist()
-    logger.info(f"Searching Sentinel-2 L2A imagery for {CITY.replace('_', ' ').title()} ({YEAR})")
-except Exception as e:
-    logger.error(f"Failed to load AOI from {GEOJSON_FILE}: {e}")
-    raise
+def download_s2_composite(aoi, date_range, output_path,
+                          max_cloud=20, reducer="median", min_coverage=95):
+    """Download Sentinel-2 L2A composite with automatic baseline correction"""
+    
+    # Load AOI
+    geom = gpd.read_file(aoi).to_crs("EPSG:4326")
+    bbox = geom.total_bounds.tolist()
+    start_date, end_date = date_range
+    logger.info(f"Using AOI bbox {bbox} and date range {start_date} → {end_date}")
 
-# ----------------- STAC Search -----------------
-try:
+    # Search STAC items
     catalog = Client.open("https://planetarycomputer.microsoft.com/api/stac/v1")
     search = catalog.search(
         collections=["sentinel-2-l2a"],
-        datetime=f"{START_DATE}/{END_DATE}",
         bbox=bbox,
-        query={"eo:cloud_cover": {"lt": MAX_CLOUD_COVER}}
+        datetime=f"{start_date}/{end_date}",
+        query={"eo:cloud_cover": {"lt": max_cloud}},
     )
-    items = search.item_collection()
-    if len(items) == 0:
-        raise ValueError("No Sentinel-2 scenes found for the specified date range and AOI.")
-    logger.info(f"Found {len(items)} scenes")
-        
-except Exception as e:
-    logger.error(f"STAC search failed: {e}")
-    raise
+    items = list(search.items())
+    logger.info(f"Found {len(items)} Sentinel-2 items.")
+    if not items:
+        raise FileNotFoundError("No Sentinel-2 items found. Try increasing max_cloud or expanding the date range.")
 
-# ----------------- Group by MGRS tile -----------------
-from shapely.geometry import shape
-from shapely.ops import unary_union
+    # Check AOI coverage
+    footprints = [shape(item.geometry) for item in items]
+    footprints_union = unary_union(footprints)
+    aoi_union = unary_union(geom.geometry)
+    coverage_fraction = footprints_union.intersection(aoi_union).area / aoi_union.area * 100
+    logger.info(f"Retrieved items cover {coverage_fraction:.1f}% of the AOI.")
+    if coverage_fraction < min_coverage:
+        raise RuntimeError(
+            f"Coverage {coverage_fraction:.1f}% < min_coverage {min_coverage}%. "
+            f"Consider increasing --max_cloud or expanding the date range."
+        )
 
-aoi_geom = aoi.geometry.unary_union
+    # Sign items
+    signed_items = [pc.sign(item) for item in items]
+    logger.info("Signed STAC items with Planetary Computer credentials.")
 
-items_by_tile = {}
-for it in items:
-    try:
-        footprint = shape(it.geometry)
-        if not footprint.intersects(aoi_geom):
-            continue
+    # Baseline summary & mark for correction
+    logger.info("=== SELECTED ITEMS SUMMARY ===")
+    baseline_counts = {}
+    correction_needed_count = 0
+    for it in signed_items:
+        info = get_processing_baseline_info(it)
+        processing_baseline = info['processing_baseline']
+        baseline_counts[processing_baseline] = baseline_counts.get(processing_baseline, 0) + 1
+        if info['requires_offset_correction']:
+            correction_needed_count += 1
+            logger.info(f"Info: Item {it.id} requires baseline correction (PB {processing_baseline}).")
+            it.properties["_baseline_offset"] = BOA_ADD_OFFSET_PB04
+        else:
+            it.properties["_baseline_offset"] = 0
+        logger.info(f"  - {it.id} (cloud: {info['cloud_cover']}%, baseline: {processing_baseline}, "
+                    f"requires correction: {info['requires_offset_correction']})")
+    logger.info(f"Processing Baseline Distribution: {baseline_counts}")
+    logger.info(f"Items requiring radiometric offset correction: {correction_needed_count}/{len(signed_items)}")
+    if len(baseline_counts) > 1:
+        logger.warning("Items have different processing baselines! This may affect ML model consistency.")
+        if 0 < correction_needed_count < len(signed_items):
+            logger.warning("MIXED BASELINES: Some items require offset correction, others don't!")
+            logger.warning("Consider filtering to a single processing baseline for consistent time series analysis.")
 
-        tile_id = it.properties.get("s2:mgrs_tile") or it.id
-        cloud = float(it.properties.get("eo:cloud_cover", 100.0))
-
-        # Keep lowest-cloud item for each tile
-        if tile_id not in items_by_tile or cloud < items_by_tile[tile_id]["cloud"]:
-            items_by_tile[tile_id] = {"item": it, "cloud": cloud}
-
-    except Exception as e:
-        logger.warning(f"Error filtering item {it.id}: {e}")
-        continue
-
-filtered_items = [v["item"] for v in items_by_tile.values()]
-signed_items = [pc.sign(it) for it in filtered_items]
-
-logger.info(f"Selected {len(filtered_items)} unique tiles after filtering")
-
-# ----------------- Validate AOI Coverage -----------------
-logger.info("Validating AOI coverage...")
-selected_footprints = []
-for item in signed_items:
-    try:
-        footprint = shape(item.geometry)
-        selected_footprints.append(footprint)
-    except Exception as e:
-        logger.warning(f"Error processing footprint for item {item.id}: {e}")
-        continue
-
-if not selected_footprints:
-    logger.error("No valid footprints found from selected items!")
-    raise ValueError("No valid footprints found from selected items!")
-
-combined_footprint = unary_union(selected_footprints)
-
-aoi_area = aoi_geom.area
-covered_area = aoi_geom.intersection(combined_footprint).area
-coverage_percentage = (covered_area / aoi_area) * 100
-
-logger.info(f"AOI coverage: {coverage_percentage:.2f}%")
-
-# Set minimum coverage threshold (e.g., 95%)
-MIN_COVERAGE_THRESHOLD = 95.0
-
-if coverage_percentage < MIN_COVERAGE_THRESHOLD:
-    logger.error(f"Search results only cover {coverage_percentage:.1f}% of the AOI - incomplete coverage detected.")
-    logger.error("Please adjust date range or increase cloud cover threshold and try again.")
-    raise ValueError(f"Insufficient AOI coverage: {coverage_percentage:.1f}%")
-else:
-    logger.info("✓ AOI coverage validation passed - proceeding with processing")
-
-logger.info("=== SELECTED ITEMS SUMMARY ===")
-baseline_counts = {}
-correction_needed_count = 0
-
-for it in signed_items:
-    info = get_processing_baseline_info(it)
-    processing_baseline = info['processing_baseline']
-    baseline_counts[processing_baseline] = baseline_counts.get(processing_baseline, 0) + 1
-    
-    if info['requires_offset_correction']:
-        correction_needed_count += 1
-    
-    logger.info(f"  - {it.id} (cloud: {info['cloud_cover']}%, baseline: {processing_baseline}, correction: {info['requires_offset_correction']})")
-
-logger.info(f"Processing Baseline Distribution: {baseline_counts}")
-logger.info(f"Items requiring radiometric offset correction: {correction_needed_count}/{len(signed_items)}")
-
-if len(baseline_counts) > 1:
-    logger.warning("WARNING: Items have different processing baselines! This may affect ML model consistency.")
-    if correction_needed_count > 0 and correction_needed_count < len(signed_items):
-        logger.warning("MIXED BASELINES: Some items require offset correction, others don't!")
-        logger.warning("Consider filtering to a single processing baseline for consistent time series analysis.")
-
-# ----------------- Process in native CRS -----------------
-unique_items = {}
-for item in signed_items:
-    try:
-        tile_id = item.properties.get("s2:mgrs_tile")
-        cloud = item.properties.get("eo:cloud_cover", 100)
-        if tile_id not in unique_items or cloud < unique_items[tile_id].properties.get("eo:cloud_cover", 100):
-            unique_items[tile_id] = item
-    except Exception as e:
-        logger.warning(f"Error processing signed item: {e}")
-        continue
-
-selected_items = list(unique_items.values())
-
-logger.info("Processing stack...")
-
-try:
-    # Check for multiple CRS
-    crs_set = set()
-    
-    for item in signed_items:
-        try:
-            # Get CRS from the first band asset
-            with rasterio.open(item.assets[BAND_ASSETS[0]].href) as src:
-                epsg_code = src.crs.to_epsg()
-                crs_set.add(epsg_code)
-        except Exception as e:
-            logger.warning(f"Could not determine CRS for item {item.id}: {e}")
-    
-    logger.info(f"Found CRS codes: {sorted(crs_set)}")
-    
-    if len(crs_set) > 1:
-        target_epsg = sorted(crs_set)[-1]
-        target_crs = f"EPSG:{target_epsg}"
-        logger.warning(f"Multiple CRS detected: {sorted(crs_set)}")
-        logger.info(f"Using CRS: {target_crs}")
-        
-        stack = stackstac.stack(
-            signed_items,
-            assets=BAND_ASSETS,
-            resolution=RESOLUTION,
-            chunksize=CHUNK_SIZE,
-            epsg=target_epsg
-        ).astype("float32")
-    else:
-        target_epsg = list(crs_set)[0] if crs_set else None
-        target_crs = f"EPSG:{target_epsg}" if target_epsg else None
-        logger.info(f"Using native CRS: {target_crs}")
-        
-        stack = stackstac.stack(
-            signed_items,
-            assets=BAND_ASSETS,
-            resolution=RESOLUTION,
-            chunksize=CHUNK_SIZE
-        ).astype("float32")
-
-    logger.info(f"Stack shape: {stack.shape}")
-    logger.info(f"Stack dimensions: {stack.dims}")
-
-    # ----------------- Apply Radiometric Offset Correction and Convert to SR -----------------
-    requires_correction = any(get_processing_baseline_info(item)['requires_offset_correction'] 
-                             for item in signed_items)
-    
-    # Formula: Reflectance = (DN - BOA_ADD_OFFSET) / 10000
-    if requires_correction:
-        logger.info("Applying BOA offset correction and converting to Surface Reflectance...")
-        stack = (stack + BOA_ADD_OFFSET_PB04) / QUANTIFICATION_VALUE
-        data_type_info = "SR clipped [0,1] (BOA offset corrected)"
-    else:
-        logger.info("Converting Raw Digital Numbers to Surface Reflectance...")
-        stack = stack / QUANTIFICATION_VALUE
-        data_type_info = "SR clipped [0,1]"
-    
-    logger.info("Clipping surface reflectance values to [0,1] range...")
-    stack = stack.clip(0, 1)
-
-    # Clip negative values to 0 
-    stack = stack.where(stack >= 0, 0)
-    
-    stack = stack.where(stack != 0, np.nan)
-
-    # ----------------- Median mosaic -----------------
-    logger.info("Computing median mosaic...")
-    mosaic_crs = target_crs
-    if mosaic_crs is None:
-        mosaic_crs = stack.rio.crs
-        if mosaic_crs is None:
-            with rasterio.open(signed_items[0].assets["B02"].href) as src:
-                mosaic_crs = src.crs
-    
-    logger.info(f"Mosaic CRS: {mosaic_crs}")
-    
-    mosaic_xr = stack.median(dim='time', skipna=True)
-    
-    if 'band' in mosaic_xr.dims and len(mosaic_xr.coords['band']) == len(BAND_ASSETS):
-        mosaic_xr = mosaic_xr.assign_coords(band=BAND_ASSETS)
-
-    if isinstance(mosaic_crs, str):
-        from rasterio.crs import CRS
-        mosaic_crs_obj = CRS.from_string(mosaic_crs)
-    else:
-        mosaic_crs_obj = mosaic_crs
-    
-    mosaic_xr = mosaic_xr.rio.write_crs(mosaic_crs_obj)
-    mosaic_xr = mosaic_xr.rio.set_spatial_dims(x_dim="x", y_dim="y")
-
-    # Clip to AOI bounding box (reproject AOI to match mosaic CRS)
-    aoi_proj = aoi.to_crs(mosaic_crs)
-    clip_bounds = aoi_proj.total_bounds
-    logger.info(f"Clipping bounds in {mosaic_crs}: {clip_bounds}")
-    logger.info(f"Mosaic extent - X: {mosaic_xr.x.min().values} to {mosaic_xr.x.max().values}, Y: {mosaic_xr.y.min().values} to {mosaic_xr.y.max().values}")
-    
-    x_range = clip_bounds[2] - clip_bounds[0]  # max_x - min_x
-    y_range = clip_bounds[3] - clip_bounds[1]  # max_y - min_y
-    
-    if x_range <= 0 or y_range <= 0:
-        logger.warning("Invalid clipping bounds detected, skipping clipping step")
-    else:
-        try:
-            mosaic_xr = mosaic_xr.rio.clip_box(*clip_bounds)
-            logger.info("Successfully clipped to AOI bounds")
-        except Exception as e:
-            logger.warning(f"Clipping failed: {e}. Proceeding without clipping.")
-
-    del stack
-    gc.collect()
-
-    # ----------------- Save raster -----------------
-    output_file = os.path.join(OUTPUT_DIR, f"S2_{YEAR}.tif")
-    logger.info("Reprojecting to EPSG:4326...")
-    mosaic_wgs = mosaic_xr.rio.reproject(
-        "EPSG:4326",
-        resampling=RESAMPLING_METHOD,
-        nodata=0 
+    # Stack signed items
+    da = stackstac.stack(
+        signed_items,
+        assets=BAND_ASSETS,
+        bounds_latlon=bbox,
+        epsg=4326,
+        resolution=None,
+        chunksize=1024
     )
+    logger.info(f"Stack shape: {da.shape} (time, band, y, x)")
 
-    mosaic_wgs.attrs = {
-        "BANDS_USED": ", ".join(BAND_ASSETS),
-        "DATA_RANGE": data_type_info
-    }
+    # Apply baseline correction and scaling per time slice
+    baseline_offsets = np.array([
+        it.properties.get("_baseline_offset", 0) for it in signed_items
+    ], dtype=np.float32)
 
-    mosaic_wgs = mosaic_wgs.where(~np.isnan(mosaic_wgs), 0)
+    da_corrected = da.copy()
+    for t_idx, offset in enumerate(baseline_offsets):
+        da_corrected[t_idx, :, :, :] = (da[t_idx, :, :, :] + offset) / QUANTIFICATION_VALUE
 
-    logger.info(print(f"Min and max values in the final output: {mosaic_wgs.min().values} to {mosaic_wgs.max().values}"))
-    logger.info(f"Saving to {output_file}...")
-    
-    mosaic_wgs.rio.to_raster(
-        output_file, 
-        driver="COG",  
-        compress=COMPRESSION, 
-        BIGTIFF="YES"
+    da_corrected = da_corrected.astype('float32').compute()
+
+    # Composite
+    if reducer == "median":
+        mosaic = da_corrected.median(dim="time", keep_attrs=True)
+    elif reducer == "mean":
+        mosaic = da_corrected.mean(dim="time", keep_attrs=True)
+    else:
+        raise ValueError("Reducer must be 'median' or 'mean'")
+
+    mosaic = mosaic.sel(band=BAND_ASSETS)
+    mosaic.rio.write_crs("EPSG:4326", inplace=True)
+
+    # Save as Cloud Optimized GeoTIFF (COG) float32
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    mosaic.rio.to_raster(
+        output_path,
+        driver="COG",
+        dtype="float32",
+        compress='DEFLATE',
+        predictor=2,
+        tiled=True,
+        blockxsize=512,
+        blockysize=512,
+        overview_level=[2, 4, 8, 16, 32],
+        BIGTIFF="IF_SAFER"
     )
+    logger.info(f"Composite saved as COG at {output_path}")
 
-    del mosaic_xr, mosaic_wgs
-    gc.collect()
+    return output_path
 
-    logger.info("Processing completed successfully!")
-    logger.info(f"Output data range: {data_type_info}")
 
-except Exception as e:
-    logger.error(f"Processing failed: {e}")
-    import traceback
-    logger.error(traceback.format_exc())
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Download Sentinel-2 L2A composite with automatic baseline correction using Planetary Computer STAC API.")
+    parser.add_argument("--aoi", required=True, help="Path to AOI file (shapefile or GeoJSON).")
+    parser.add_argument("--start", required=True, help="Start date (YYYY-MM-DD).")
+    parser.add_argument("--end", required=True, help="End date (YYYY-MM-DD).")
+    parser.add_argument("--out", required=True, help="Output GeoTIFF file path.")
+    parser.add_argument("--max_cloud", type=float, default=10, help="Max cloud cover (default: 10).")
+    parser.add_argument("--reducer", choices=["median","mean"], default="median", help="Composite method (default: median).")
+    parser.add_argument("--min_coverage", type=float, default=95, help="Minimum required AOI coverage in percent (default: 95).")
+    args = parser.parse_args()
+
+    try:
+        download_s2_composite(
+            aoi=args.aoi,
+            date_range=(args.start, args.end),
+            output_path=args.out,
+            max_cloud=args.max_cloud,
+            reducer=args.reducer,
+            min_coverage=args.min_coverage
+        )
+    except (FileNotFoundError, RuntimeError) as e:
+        logger.error(f"Operation aborted: {e}")

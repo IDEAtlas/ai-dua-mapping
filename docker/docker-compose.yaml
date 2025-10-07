@@ -1,0 +1,72 @@
+name: geo-ai-stack
+
+services:
+  geoai-tf:
+    build:
+      context: .
+      dockerfile: Dockerfile.tf
+    image: geoai-tf
+    container_name: geoai-tf
+    profiles: ["tf"]
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - /data:/data
+    shm_size: 8g
+    ipc: host
+    tty: true
+    stdin_open: true
+
+  geoai-torch:
+    build:
+      context: .
+      dockerfile: Dockerfile.torch
+    image: geoai-torch
+    container_name: geoai-torch
+    profiles: ["torch"]
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - /data:/data
+    shm_size: 8g
+    ipc: host
+    tty: true
+    stdin_open: true
+
+  terrakit:
+    build:
+      context: .
+      dockerfile: Dockerfile.terrakit
+    image: terrakit
+    container_name: terrakit
+    profiles: ["terrakit"]
+    volumes:
+      - /data:/data
+      - /eodata:/eodata
+    deploy:
+      resources:
+        limits:
+          memory: 32G
+        reservations:
+          memory: 8G
+    environment:
+      - _JAVA_OPTIONS=-Xmx24G -XX:+UseG1GC -XX:+UseStringDeduplication -XX:MetaspaceSize=512M -XX:MaxMetaspaceSize=1G
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    tty: true
+    stdin_open: true
+
