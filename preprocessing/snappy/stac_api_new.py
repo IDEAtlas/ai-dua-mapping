@@ -255,13 +255,13 @@ def process_sentinel2_stack(
     output_file = os.path.join(output_dir, f"S2_{year}.tif")
     try:
         aoi, bbox = load_aoi(geojson_file)
-        logger.info(f"Searching Sentinel-2 L2A imagery for {city.replace('_', ' ').title()} ({year})")
+        logger.info(f"Searching Sentinel-2 L2A imagery for {city.replace('_', ' ').title()} ({year}), date range: {start_date} to {end_date}, max cloud cover: {max_cloud_cover}%)")
         items = stac_search(bbox, start_date, end_date, max_cloud_cover)
         from shapely.ops import unary_union
         aoi_geom = aoi.geometry.unary_union
         filtered_items = filter_items_by_tile(items, aoi_geom)
         signed_items = [pc.sign(it) for it in filtered_items]
-        logger.info(f"Selected {len(filtered_items)} unique tiles after filtering")
+        logger.info(f"Selected {len(filtered_items)} unique tiles after filtering: {filtered_items}")
         validate_aoi_coverage(signed_items, aoi_geom, min_coverage_threshold)
         logger.info("=== SELECTED ITEMS SUMMARY ===")
         summarize_items(signed_items, band_assets)
