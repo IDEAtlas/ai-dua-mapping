@@ -2,7 +2,7 @@ import requests
 import os
 import json
 
-def fetch_and_save_adm_borders_geojson(q, output_folder, output_file=None) -> str:
+def fetch_and_save_adm_borders_geojson(q, output_folder, output_file=None, replace=False) -> str:
     r = requests.get(
         "https://nominatim.openstreetmap.org/search",
         params={"q": q, "format": "json", "polygon_geojson": 1, "limit": 1},
@@ -14,7 +14,10 @@ def fetch_and_save_adm_borders_geojson(q, output_folder, output_file=None) -> st
     if not output_file:
         output_file = f"{q.replace(', ', '_').replace(' ', '_').lower()}_aoi.geojson"
 
-    if res:
+    if os.path.exists(os.path.join(output_folder, output_file)) and not replace:
+        print(f"File {output_file} already exists in {output_folder}. Use replace=True to overwrite.")
+        return os.path.join(output_folder, output_file)
+    elif res:
         geojson = res[0].get("geojson")
         print(geojson)  # print to console
         # Save to file
