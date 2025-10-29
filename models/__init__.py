@@ -6,3 +6,4 @@ from models.fcn import *
 from models.resunet import *
 from models.unet import *
 from models.utils import *
+from models.fgnet import *
