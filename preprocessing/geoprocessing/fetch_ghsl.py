@@ -90,7 +90,8 @@ class GHSLDownloader:
         # Generate a prefix with the first 3 letters of the AOI file name in capital letters
         aoi_prefix = os.path.basename(aoi_geojson)[:3].upper()
 
-        base_url = "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_S_GLOBE_R2023A/GHS_BUILT_S_E2018_GLOBE_R2023A_54009_10/V1-0/tiles"
+        base_url = "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_BUILT_S_GLOBE_R2023A/GHS_BUILT_S_E2018_GLOBE_R2023A_54009_10/V1-0/tiles" #built-up
+        # base_url = "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2023A/GHS_POP_E2025_GLOBE_R2023A_54009_100/V1-0/tiles" #population
         if output_dir is None:
             output_dir = self.temp_dir
         os.makedirs(output_dir, exist_ok=True)
@@ -98,6 +99,7 @@ class GHSLDownloader:
 
         for tile_code in tile_codes:
             file_name = f"GHS_BUILT_S_E2018_GLOBE_R2023A_54009_10_V1_0_{tile_code}.zip"
+            # file_name = f"GHS_POP_E2025_GLOBE_R2023A_54009_100_V1_0_{tile_code}.zip"
             url = f"{base_url}/{file_name}"
             local_zip_path = os.path.join(self.temp_dir, file_name)
             print(f"Downloading tile {tile_code} from {url}")
@@ -138,5 +140,5 @@ class GHSLDownloader:
 
 # Example usage
 # downloader = GHSLDownloader(temp_dir="/data/raw/ghsl/temp")
-# downloaded_files = downloader.download_tiles(aoi_geojson="/data/raw/aoi/guatemala_city_aoi.geojson",
-#                                             output_dir="/data/raw/ghsl")
+# downloaded_files = downloader.download_tiles(aoi_geojson="/data/raw/aoi/salvador_aoi.geojson",
+#                                             output_dir="/data/raw/ghsl/pop")
