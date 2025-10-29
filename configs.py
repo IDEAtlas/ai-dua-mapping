@@ -21,6 +21,7 @@ class Config:
         self.LOG_PATH = config_data["LOG_PATH"]
         self.PREDICTION_PATH = config_data["PREDICTION_PATH"]
         self.AOI = config_data["AOI"]
+        self.STRIDE = config_data["STRIDE"]
     
     # Set seed for reproducibility
     def set_seed(self):
