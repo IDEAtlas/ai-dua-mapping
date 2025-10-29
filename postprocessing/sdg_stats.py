@@ -30,8 +30,12 @@ def compute_sdg111_stats(gdf, pop_raster_path, formal_val, informal_val, output_
     with rasterio.open(pop_raster_path) as src:
         crs = src.crs
         nodata = src.nodata
-
-    gdf = gdf.to_crs(crs)
+    if gdf.crs != crs:
+        print(f"Reprojecting GeoDataFrame from {gdf.crs.to_string()} to {crs}")
+        gdf = gdf.to_crs(crs)
+    else:
+        print("GeoDataFrame CRS matches population raster CRS.")
+        print(f'CRS: {crs}')
 
     # Area and population per polygon
     gdf['area_m2'] = gdf.geometry.area
