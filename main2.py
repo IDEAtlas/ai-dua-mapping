@@ -9,66 +9,51 @@ import tensorflow as tf
 import models
 import losses
 import dataloaders as dl
-import math
 import configs as config
+
 
 
 parser = argparse.ArgumentParser(description="Train, evaluate or save a deep learning model.")
 parser.add_argument("--stage", choices=["train", "test", "infer"], required=True, help="Select mode: train, test or save")
 parser.add_argument("--city", type=str, required=True, help="Specify the city name")
-parser.add_argument("--model", type=str, required=True, choices=['unet', 'fcndk6', 'deeplab', 'glavitu', 'mbcnn', 'lightunet', 'fpn'], 
-                    help="Choose one of the model to use")
+parser.add_argument("--model", type=str, required=True, choices=['unet', 'fcndk6', 'deeplab', 'glavitu', 'mbcnn', 'lightunet', 'fpn'], help="Choose one of the model to use")
 parser.add_argument("--s2", type=str, required=False, help="Sentinel-2 image path (only for inference)")
 parser.add_argument("--bd", type=str, required=False, help="Building density raster path (only for inference)")
 parser.add_argument("--weight", type=str, required=False, help="Specify path to the model weight")
-
 args = parser.parse_args()
-
-
-def print_info(name, data):
-    if isinstance(data, list):  # Multiple inputs (list of arrays)
-        print(f"{name} Shape: {[d.shape for d in data]}")
-    else:  # Single input case
-        print(f"{name} Shape: {data.shape}")
 
 config = config.Config()
 city = args.city
 dir = os.path.join(config.DATA_PATH, city)
 inputs = ".".join(config.DATASET)
-
-input_shapes = {input: config.IN_SHAPE[input] for input in config.DATASET}
 h, w, _ = config.IN_SHAPE[config.DATASET[0]]
-
 
 if args.stage == "train":
 
     print('Training model on', city.capitalize(), 'dataset')
     print('Input modality: ', config.DATASET)
 
-    train_images = [dl.load_data(os.path.join(dir, 'train'), h, w, input) for input in config.DATASET]
-    val_images = [dl.load_data(os.path.join(dir, 'val'), h, w, input) for input in config.DATASET]
+    train_dataset = dl.MBCNNDataset(os.path.join(dir, "train"), target_size=(h, w))
+    val_dataset = dl.MBCNNDataset(os.path.join(dir, "val"), target_size=(h, w))
 
-    if len(config.DATASET) == 1:
-        train_images = train_images[0]
-        val_images = val_images[0]
+    train_loader = dl.mbcnn_loader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True)
+    val_loader = dl.mbcnn_loader(val_dataset, batch_size=config.BATCH_SIZE, shuffle=False)
 
-    train_label = dl.load_data(os.path.join(dir, 'train'), h, w, 'RF', config.N_CLASSES)
-    val_label = dl.load_data(os.path.join(dir, 'val'), h, w, 'RF', config.N_CLASSES)
+    sample_inputs, sample_mask = next(iter(val_loader))
+    if len(inputs) == 1:
+        print(f"Single input shape: {sample_inputs.shape}")
+    else:
+        for i, input_tensor in enumerate(sample_inputs):
+            print(f"Input {inputs[i]} shape: {input_tensor.shape}")
+    print(f"Mask shape: {sample_mask.shape}")
 
-    print_info("Train Images", train_images)
-    print_info("Validation Images", val_images)
-    print_info("Train Label", train_label)
-    print_info("Validation Label", val_label)
+    cl_dict, cl_list = train_dataset.compute_class_weights()
 
-    cl_weights = dl.calculate_class_weights(train_label)
-    print(f'Class weight: {cl_weights}')
-    
     import segmentation_models as sm
-    dice_loss = sm.losses.DiceLoss(class_weights=cl_weights) 
+    dice_loss = sm.losses.DiceLoss(class_weights=cl_list) 
     focal_loss = sm.losses.CategoricalFocalLoss()
     t_loss =  dice_loss + (2 * focal_loss)
-    j_loss = sm.losses.JaccardLoss(class_weights=cl_weights, class_indexes=None, per_image=False, smooth=1e-05)
-    
+    # j_loss = sm.losses.JaccardLoss(class_weights=cl_weights, class_indexes=None, per_image=False, smooth=1e-05)
     # dice_focal = losses.CombinedDiceFocalLoss(class_idx = 2, gamma=2.0, alpha=0.25, dice_weight=0.25, focal_weight=0.75, class_weights=cl_weights)
     # focal = losses.FocalLoss(gamma=2.0, alphas=0.25)
 
@@ -78,7 +63,7 @@ if args.stage == "train":
     model.compile(
     optimizer=tf.keras.optimizers.Adam(learning_rate=config.LR),
     loss=t_loss,
-    metrics=[sm.metrics.FScore(name='f1')]         
+    metrics=[sm.metrics.FScore(average='macro', name='f1')]         
     )
 
     if not os.path.exists(config.CHECKPOINT_PATH):
@@ -89,36 +74,38 @@ if args.stage == "train":
     
     callbacks = build_callbacks(city, inputs, model, None, config, monitor="val_loss", patience=20)
 
-    model.fit(train_images, train_label,
-            batch_size=config.BATCH_SIZE,
-            steps_per_epoch = math.ceil(len(train_label) / config.BATCH_SIZE),
+    model.fit(train_loader,
             epochs=config.EPOCHS,
-            callbacks=callbacks,
-            validation_data=(val_images, val_label),
-            validation_steps = len(val_label) // config.BATCH_SIZE,
+            callbacks=[callbacks],
+            validation_data=val_loader,
             verbose=0)
                 
 elif args.stage == "test":
-    import metrics
+
+    from metrics import metrics
     print('Evaluating model on', city.capitalize(), 'dataset \n')
-    print('Input modality: ', config.DATASET)
+    print('Modalities: ', config.DATASET)
 
     model = models.select_model(args.model, config)
     weight = args.weight if args.weight else (f'./{config.CHECKPOINT_PATH}/{city}.{inputs.lower()}.{model.name}.weights.h5')
+    # weight = './checkpoint/best/buenos_aires_s2_morph_mbcnn.weights.h5'
     print(f'Model weight: {weight}')
 
+    # Raise an exception if the weights file does not exist
     if not os.path.exists(weight):
-        raise FileNotFoundError(f"Weight file not found: {weight}")
+        raise FileNotFoundError(f"Weight file not found: {weight}\n"
+                            "Check --weight, config.CHECKPOINT_PATH, inputs in config.json, or run training to create this file.")
+    
     model.load_weights(weight)
 
-    test_images = [dl.load_data(os.path.join(dir, 'test'), h, w, input) for input in config.DATASET]
-    if len(config.DATASET) == 1:
+    # test_dataset = dl.RasterDataset(os.path.join(dir, "test"))
+    # test_loader = dl.create_dataloader(test_dataset, batch_size=batch, shuffle=False)
+
+    test_images = [dl.load_data(os.path.join(dir, 'test'), None, None, input) for input in inputs]
+    if len(inputs) == 1:
         test_images = test_images[0]
 
-    test_label = dl.load_data(os.path.join(dir, 'test'), h, w, 'RF', config.N_CLASSES)
-
-    print_info("Test Images", test_images)
-    print_info("Test Label", test_label)
+    test_label = dl.load_data(os.path.join(dir, 'test'), None, None, 'RF', config.N_CLASSES)
 
     report, conf_matrix, iou_scores, mean_iou, fwiou = metrics.class_report(test_images, test_label, model)
 

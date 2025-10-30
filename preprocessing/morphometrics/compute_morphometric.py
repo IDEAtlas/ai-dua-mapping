@@ -1,4 +1,5 @@
-import matplotlib.pyplot as plt
+import os
+os.environ['USE_PYGEOS'] = '0'
 import geopandas as gpd
 import pandas as pd
 import momepy as mm
@@ -6,55 +7,63 @@ import osmnx as ox
 import numpy as np
 from shapely.geometry import box
 import utils
+import logging
 
-import time
+import geopandas as gpd
+import momepy as mm
+import numpy as np
+import pandas as pd
 
-start_time = time.time() #gets the current time
 
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # # df = pd.read_csv('google_buildings.csv')
 # # df.head()
-
 # # # Project to UTM
 # # from shapely import wkt
-
 # # df['geometry'] = gpd.GeoSeries.from_wkt(df['geometry'])
 # # buildings = gpd.GeoDataFrame(df, geometry='geometry', crs = 'EPSG:4326')
-# buildings = gpd.read_file('google_buildings.geojson')
-# # buildings = buildings.to_crs(32721)
-# if buildings.crs.is_geographic:
-# 	print('Reprojecting to UTM')
-# 	buildings = buildings.to_crs(buildings.estimate_utm_crs())
+logging.info("Reading building footprints...")
 
-# print(buildings.crs)
-buildings = gpd.read_parquet('/data/training_data/ancillary/buenos_aires/building_data/buenos_buildings.pq')
-# print(buildings.crs)
-# # Clip building into AOI
-clip_extent = gpd.read_file('/data/training_data/ancillary/buenos_aires/building_data/aoi55.shp').to_crs(buildings.crs)
-print("clip extent coordinate:", clip_extent.crs)
+buildings = gpd.read_file('/data/raw/buildings/jakarta_bldg.gpkg')
+logging.info(f'Total number of building footprints: {len(buildings)}')
+logging.info(f"Original coordinate: {buildings.crs}")
 
-buildings = gpd.clip(buildings, clip_extent)
-print(f'Total number of building footprints{len(buildings)}')
+if buildings.crs.is_geographic:
+	logging.info('Reprojecting to UTM')
+	buildings = buildings.to_crs(buildings.estimate_utm_crs())
+logging.info(f"Reprojected coordinate: {buildings.crs}")
+
+# logging.info(f"Clipping building footprints to AOI...")
+# clip_extent = gpd.read_file('/data/raw/aoi/jakarta_aoi.geojson').to_crs(buildings.crs)
+# buildings = gpd.clip(buildings, clip_extent)
+# logging.info(f'Total number of building footprints after clipping: {len(buildings)}')
 
 # ### Check and correct geometries
-# buildings.geometry = buildings.buffer(0)
-# buildings = buildings[~buildings.geometry.isna()]
+logging.info("Checking and correcting geometries...")
+buildings.geometry = buildings.buffer(0)
+buildings = buildings[~buildings.geometry.isna()]
 # buildings = buildings.reset_index(drop=True).explode().reset_index(drop=True)
+buildings = buildings.reset_index(drop=True).explode(index_parts=True).reset_index(drop=True)  # Add index_parts=True
+
 
 # # ## Count the number of buildings again
-
-# buildings.geom_type.value_counts()
+logging.info(f'Total number of building footprints after cleaning: {len(buildings)}')
+buildings.geom_type.value_counts()
 
 # # ## Fill islands within polygons
-
-# buildings = gpd.GeoDataFrame(geometry=utils.fill_insides(buildings))
-# buildings["uID"] = range(len(buildings))
+logging.info("Filling islands within polygons...")
+buildings = gpd.GeoDataFrame(geometry=utils.fill_insides(buildings))
+# another option to fill islands
+logging.info(f'Total number of building footprints after filling islands: {len(buildings)}')
+buildings["uID"] = range(len(buildings))
 # print(buildings.crs)
 
 # buildings.to_parquet('buenos_buildings.pq')
 # buildings.to_file('buildings.shp')
 
-# buildings = gpd.read_parquet('/data/training_data/ancillary/buenos_aires/building_data/buenos_aires_buildings.pq')
+# buildings = gpd.read_parquet('/buenos_aires_buildings.pq')
 # buildings = gpd.read_file('buildings.shp')
 
 # Preview the data attribute
@@ -62,39 +71,23 @@ print(f'Total number of building footprints{len(buildings)}')
 # buildings.head()
 
 # Check validity of input
-
+logging.info("Checking validity of building geometries...")
 check = mm.CheckTessellationInput(buildings)
-print('Checked validity of input')
+logging.info('Checked validity of input')
 
 # Tessellation
+logging.info("Creating tessellation...")
 limit = mm.buffered_limit(buildings, 100)
 tess = mm.Tessellation(buildings, "uID", limit, segment=2).tessellation
 
 # Save to *.pq
 
-tess.to_parquet('/data/training_data/ancillary/buenos_aires/building_data/tess_aoi55.pq')
-tess.to_file('/data/training_data/ancillary/buenos_aires/building_data/tess_aoi55.shp')
+# tess.to_parquet('/data/training_data/ancillary/buenos_aires/building_data/tess_aoi55.pq')
+# tess.to_file('/data/training_data/ancillary/buenos_aires/building_data/tess_aoi55.shp')
 
 # # Count the number of tessellation
 
 # print(tess.shape)
-
-
-# Plot the geometry
-
-# tess.plot(figsize=(20,20))
-
-import geopandas as gpd
-import momepy as mm
-from tqdm import tqdm
-from momepy import limit_range
-import numpy as np
-import pandas as pd
-from inequality.theil import Theil
-import libpysal
-import scipy as sp
-import mapclassify
-import mapclassify.classifiers as classifiers
 
 # Read preprocessed data: buildings and tessellation
 
@@ -104,7 +97,7 @@ tess = tess #gpd.read_parquet('tessellation.pq')
 #blocks = gpd.read_parquet('blocks.pq')
 
 ### Few metrics computed over building footprint, please refer to the online documentations about the functionalities
-
+logging.info("Computing morphometric features for buildings and tessellations...")
 blg['sdbAre'] = mm.Area(blg).series
 blg['sdbPer'] = mm.Perimeter(blg).series
 blg['ssbCCo'] = mm.CircularCompactness(blg, 'sdbAre').series
@@ -130,37 +123,25 @@ tess['sicCAR'] = mm.AreaRatio(tess, blg, 'sdcAre', 'sdbAre', 'uID').series
 
 # print(tess.head())
 
+logging.info("Morphometric features computed successfully.")
 ### Save the computed metrics seperately, NOT along with the geometries (polygons)
 
-blg.drop(columns='geometry').to_parquet('/data/training_data/ancillary/buenos_aires/building_data/blg_data_aoi55.parquet')
-tess.drop(columns='geometry').to_parquet('/data/training_data/ancillary/buenos_aires/building_data/tess_data_aoi55.parquet')
+# blg.drop(columns='geometry').to_parquet('/data/training_data/ancillary/buenos_aires/building_data/blg_data_aoi55.parquet')
+# tess.drop(columns='geometry').to_parquet('/data/training_data/ancillary/buenos_aires/building_data/tess_data_aoi55.parquet')
 
 ### We can also save the computed metrics of buildings and tessellations together
-
+logging.info("Merging and saving results...")
 merged = tess.merge(blg.drop(columns=['geometry']), on='uID')
-
 primary = merged.drop(columns=['geometry'])
-primary.to_parquet('primary.parquet')
+# primary.to_parquet('primary.parquet')
 
 # Many different way to save the results, according to your own preference.
 # For easy visualization, we can also attach all the metrics to the building attribute table, and save it as a *.shp file for external visualization in other GIS softwares.
 
 merged2 = blg.merge(tess.drop(columns=['geometry']), on='uID')
-
-merged2.to_file('/data/training_data/ancillary/buenos_aires/building_data/buenos_morph_aoi55.shp')
-merged2.to_parquet('/data/training_data/ancillary/buenos_aires/building_data/buenos_morph_aoi55.pq')
+merged2.to_file('/data/raw/buildings/umm/jakarta_morph.gpkg')
+# merged2.to_parquet('/data/training_data/ancillary/buenos_aires/building_data/buenos_morph_aoi55.pq')
 
 # print(merged2.head())
-
-
 # print(merged.columns)
-
-end_time = time.time()
-
-elapsed_time = end_time-start_time
-
-# Calculate hours and minutes
-hours, remainder = divmod(elapsed_time, 3600)
-minutes, seconds = divmod(remainder, 60)
-
-print(f"Elapsed time: {int(hours)} hours {int(minutes)} minutes")
+logging.info("Morphometric features saved to /data/raw/buildings/umm/jakarta_morph.gpkg.")
