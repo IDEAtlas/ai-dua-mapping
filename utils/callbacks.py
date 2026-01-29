@@ -3,7 +3,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 from tensorflow.keras.callbacks import ModelCheckpoint, CSVLogger, EarlyStopping
 from tqdm.keras import TqdmCallback
 
-def build_callbacks(city, inputs, model, train_dataset, config=None, monitor="val_seg_loss", patience=15):
+def build_callbacks(city, inputs, model, train_dataset, config=None):
     """
     Build and return a list of Keras callbacks.
 
@@ -24,8 +24,8 @@ def build_callbacks(city, inputs, model, train_dataset, config=None, monitor="va
     callbacks = [
         ModelCheckpoint(
             filepath=os.path.join(f'./{config.CHECKPOINT_PATH}/{city}.{inputs.lower()}.{model.name}.weights.h5'),
-            monitor=monitor,
-            mode="min",
+            monitor=config.MONITOR,
+            mode=config.MODE,
             save_best_only=True,
             save_weights_only=True
         ),
@@ -33,15 +33,15 @@ def build_callbacks(city, inputs, model, train_dataset, config=None, monitor="va
             os.path.join("log", f"{city}.{inputs.lower()}.{model.name}.log.csv")
         ),
         TqdmCallback(
-            epochs=config.EPOCHS,
-            # data_size=len(train_dataset),
+            epochs=config.N_EPOCHS,
+            data_size=len(train_dataset),
             batch_size=config.BATCH_SIZE,
             verbose=1
         ),
         EarlyStopping(
-            monitor=monitor,
-            mode='min',
-            patience=patience,
+            monitor=config.MONITOR,
+            mode=config.MODE,
+            patience=config.PATIENCE,
             restore_best_weights=True
         )
     ]
