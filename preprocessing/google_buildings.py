@@ -12,7 +12,7 @@ import geopandas as gpd
 import pandas as pd
 import shapely
 from shapely.geometry import shape
-import s2geometry as s2
+import s2sphere as s2
 import requests
 
 #logger time should be hour, minute, second 
@@ -32,7 +32,7 @@ def get_bounding_box_s2_covering_tokens(aoi: gpd.GeoDataFrame) -> List[str]:
     logger.info("Calculating S2 cell coverage for bounding box with 1km buffer")
     
     # Get unified geometry and bounds
-    aoi_geom = aoi.geometry.unary_union
+    aoi_geom = shapely.union_all(aoi.geometry)
     region_bounds = aoi_geom.bounds
     
     # Add 1km buffer (approximately 0.009 degrees at equator)
@@ -44,24 +44,28 @@ def get_bounding_box_s2_covering_tokens(aoi: gpd.GeoDataFrame) -> List[str]:
         region_bounds[3] + buffer_degrees   # max latitude
     )
     
-    s2_lat_lng_rect = s2.S2LatLngRect_FromPointPair(
-        s2.S2LatLng_FromDegrees(buffered_bounds[1], buffered_bounds[0]),
-        s2.S2LatLng_FromDegrees(buffered_bounds[3], buffered_bounds[2])
+    s2_lat_lng_rect = s2.LatLngRect.from_point_pair(
+        s2.LatLng.from_degrees(buffered_bounds[1], buffered_bounds[0]),
+        s2.LatLng.from_degrees(buffered_bounds[3], buffered_bounds[2])
     )
-    coverer = s2.S2RegionCoverer()
-    coverer.set_fixed_level(6)
-    coverer.set_max_cells(1000000)
-    tokens = [cell.ToToken() for cell in coverer.GetCovering(s2_lat_lng_rect)]
+    coverer = s2.RegionCoverer()
+    coverer.min_level = 6
+    coverer.max_level = 6
+    coverer.level_mod = 1
+    coverer.max_cells = 1000000
+    tokens = [cell.to_token() for cell in coverer.get_covering(s2_lat_lng_rect)]
     logger.info(f"Found {len(tokens)} S2 tokens to process: {tokens}")
     return tokens
 
 def s2_token_to_shapely_polygon(s2_token: str):
     """Convert S2 token to shapely polygon."""
-    s2_cell = s2.S2Cell(s2.S2CellId_FromToken(s2_token, len(s2_token)))
+    s2_cell = s2.Cell(s2.CellId.from_token(s2_token))
     coords = []
     for i in range(4):
-        s2_lat_lng = s2.S2LatLng(s2_cell.GetVertex(i))
-        coords.append((s2_lat_lng.lng().degrees(), s2_lat_lng.lat().degrees()))
+        point = s2_cell.get_vertex(i)
+        # Convert 3D point to LatLng
+        lat_lng = s2.LatLng.from_point(point)
+        coords.append((lat_lng.lng().degrees, lat_lng.lat().degrees))
     return shapely.geometry.Polygon(coords)
 
 
@@ -70,7 +74,7 @@ def download_s2_token_to_memory(s2_token: str, aoi: gpd.GeoDataFrame, original_b
     s2_cell_geometry = s2_token_to_shapely_polygon(s2_token)
     
     # Use buffered bounds for S2 token intersection check
-    aoi_geom = aoi.geometry.unary_union
+    aoi_geom = shapely.union_all(aoi.geometry)
     buffered_bounds = aoi_geom.bounds
     buffer_degrees = 0.009
     buffered_bounds = (
@@ -134,7 +138,7 @@ def convert_dataframe_to_geospatial(df: pd.DataFrame, output_path: str, format_t
 
 def download_buildings_to_memory(aoi: gpd.GeoDataFrame, num_workers: int = 4):
     """Download building data to memory."""
-    aoi_geom = aoi.geometry.unary_union
+    aoi_geom = shapely.union_all(aoi.geometry)
     original_bounds = aoi_geom.bounds
     s2_tokens = get_bounding_box_s2_covering_tokens(aoi)
     download_s2_token_fn = functools.partial(download_s2_token_to_memory, aoi=aoi, original_bounds=original_bounds)
