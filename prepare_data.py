@@ -130,7 +130,7 @@ else:
     try:
         aoi_geojson = adm_boundaries.fetch_and_save_adm_borders_geojson(city_str, os.path.join(output_dir, "aoi"), output_file=f"{city_normalized}_aoi.geojson")
     except Exception as e:
-        logger.error("AOI boundaries not found")
+        logger.error(f"Unable to fetch city boundary. Provide your own AOI in data/raw/aoi/{city_normalized}_aoi.geojson with wgs84 projection")
         progress.close()
         sys.exit(1)
 progress.update(1)
