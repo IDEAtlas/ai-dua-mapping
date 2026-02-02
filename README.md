@@ -30,7 +30,7 @@ The IDEAtlas team comprises experts from leading scientific and industrial organ
 This partnership ensures a robust foundation for developing and implementing cost-effective EO solutions for monitoring informal settlements. 
 - Advisory Board: includes distinguished members from European Space Agency, United Nations Statistics Division, UN-Habitat and IDEAMAPS.
 
-# Data
+# IDEABench Benchmark Dataset
 Through the invaluable contributions from our local Co-anchors, we have built "IDEABench," a comprehensive dataset that serves as the foundation for training and testing AI-based models. IDEABench is not a static benchmark dataset but a continuously improving dataset built considering the feedback of local communities collected through the User Portal. The quality and geographical diversity of data collected within each city are essential for training accurate AI models and obtaining a sound quantification of model uncertainties.
 
 For each city, the input for the model was constructed from four data sources, as illustrated in Fig. 2 below:
@@ -46,7 +46,7 @@ Fig. 2: Input data to train the AI model
 
 The benchmark dataset can be freely downloaded from Data Archiving and Networked Services (DANS) using the following link: https://doi.org/10.17026/PT/X4NJII
 
-# AI Model
+# Model
 Working closely with local communities, local governments, and a range of (inter)national stakeholders, we co-designed an AI-driven strategy utilizing open Earth Observation (EO) and geospatial data to map DUAs in eight cities worldwide. We designed a tailored Multi-Branch Convolutional Neural Network (MB-CNN) architecture to fuse multi-modal data sources such as Sentinel 1 (S1), Sentinel 2 (S2), and pre-computed built-up density (PBD) for semantic segmentation of DUAs. The network consists of encoder and decoder blocks interconnected by skip connections to preserve fine-grained spatial information.
 
 
@@ -57,15 +57,98 @@ To enhance computational efficiency and reduce model complexity, we reduced the 
 
 Fig. 3: Model architecture
 
-# Results
-Our experiments suggests that combining multi-spectral data with urban morphometric features, particularly Sentinel-2 imagery and built-up density, delivers the highest accuracy in identifying and mapping DUAs. The improved reference data (Reference V2) via the IDEAtlas platform showed an increase in accuracy. However, the significant variability in accuracy across the sample cities highlights the complexity of the problem and emphasizes the need for supplementary geospatial data to enhance limitation of EO data.
 
-![results1](https://github.com/user-attachments/assets/a861e423-d6d5-4c38-b297-02fc916d4414)
+## Using the code
 
-![results2](https://github.com/user-attachments/assets/aee2b4fc-7181-4d6c-8b70-cd10e6b39066)
+Clone the repository:
+```bash
+git clone https://github.com/IDEAtlas/ai-dua-mapping.git
+```
+```bash
+cd ai-dua-mapping
+```
 
-Stay updated with our progress and contribute to the development of AI-based solutions for mapping deprived urban areas.
+**Option 1: Using Conda**
 
-- Website: https://ideatlas.eu/
-- User Portal: https://portal.ideatlas.eu/
+For CPU:
+```bash
+conda env create -f env/environment-cpu.yaml
+```
 
+For GPU:
+```bash
+conda env create -f env/environment-gpu.yaml
+```
+
+Activate the environment:
+```bash
+conda activate ideatlas
+```
+
+**Option 2: Using Docker**
+
+Build the image for CPU:
+```bash
+docker build -f env/Dockerfile-cpu.tf -t ideatlas .
+```
+
+Or for GPU:
+```bash
+docker build -f env/Dockerfile-gpu.tf -t ideatlas .
+```
+
+Run the container in detached mode:
+```bash
+docker run -dit --gpus all --name ideatlas -v $(pwd):/workspace ideatlas
+```
+
+Enter the container:
+```bash
+docker exec -it ideatlas bash
+```
+
+Configure settings by editing `config.yaml` with your desired model parameters if needed.
+
+## Training from Scratch
+Train a new model on complete dataset:
+```bash
+python main.py --task train --city nairobi --country kenya --year 2025
+```
+
+## Fine-tuning with Pre-trained Weights
+Fine-tune a pre-trained model:
+```bash
+# Using default global weights
+python main.py --task finetune --city nairobi --country kenya --year 2025
+
+# Using custom weights
+python main.py --task finetune --city nairobi --country kenya --year 2025 --weights checkpoint/custom.h5
+```
+
+## Classification/Inference
+Generate segmentation maps from trained model:
+```bash
+# Using city-specific weights
+python main.py --task classify --city nairobi --country kenya --year 2025
+
+# Using custom weights
+python main.py --task classify --city nairobi --country kenya --year 2025 --weights checkpoint/custom.h5
+```
+
+## SDG Statistics
+Compute SDG 11.1.1 statistics from classified rasters:
+```bash
+python main.py --task sdg_stats --city nairobi --country kenya --year 2025
+```
+
+**Note**: Users can customize the acquisition period of Sentinel 2 data in the preprocessing scripts located in the `preprocessing/` directory (e.g., `stac_api.py`).
+
+---
+
+### Contact Information
+
+- **Project Website**: https://ideatlas.eu/
+- **User Portal**: https://portal.ideatlas.eu/
+- **Email**: ideatlas@utwente.nl
+
+---
