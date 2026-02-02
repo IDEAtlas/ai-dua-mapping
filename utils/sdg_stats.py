@@ -6,8 +6,14 @@ from rasterstats import zonal_stats
 import rasterio
 from shapely.geometry import shape
 import os
+import sys
 import glob
+import warnings
+import urllib3
 from preprocessing import fetch_ghsl, adm_boundaries
+
+# Suppress urllib3 warnings
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,6 +21,28 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+
+def suppress_output(func, *args, **kwargs):
+    """Execute function with suppressed stdout/stderr and logging"""
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    old_level = logging.getLogger().level
+    try:
+        sys.stdout = open(os.devnull, 'w')
+        sys.stderr = open(os.devnull, 'w')
+        # Suppress all logging while executing the function
+        logging.getLogger().setLevel(logging.CRITICAL)
+        # Suppress urllib3 and other warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return func(*args, **kwargs)
+    finally:
+        sys.stdout.close() if sys.stdout != old_stdout else None
+        sys.stderr.close() if sys.stderr != old_stderr else None
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+        logging.getLogger().setLevel(old_level)
 
 def polygonize_builtup_classes(classified_raster_path, class_values):
     with rasterio.open(classified_raster_path) as src:
@@ -93,6 +121,7 @@ def main():
     parser.add_argument("--city", type=str, required=True, help="City name")
     parser.add_argument("--country", type=str, required=True, help="Country name")
     parser.add_argument("--year", type=int, required=True, help="Year of classification")
+    parser.add_argument("--model", type=str, default="mbcnn", help="Model name used for classification")
     parser.add_argument("--output", type=str, help="Optional output file for polygons (GeoJSON or GPKG).")
     parser.add_argument("--idx", choices=['012', '123'], default='123',
                         help="Classification scheme: '012' (0=non,1=ndua,2=dua) or '123' (1=non,2=ndua,3=dua)")
@@ -101,11 +130,11 @@ def main():
     # Normalize city name
     city_normalized = f"{args.city}_{args.country}".lower().replace(" ", "_").replace("-", "_")
     
-    # Find classified raster
-    classified_raster_path = f"./output/{city_normalized}.s2.bd.mbcnn.{args.year}.tif"
+    # Find classified raster with model name
+    classified_raster_path = f"./output/{city_normalized}.s2.bd.{args.model}.{args.year}.tif"
     if not os.path.exists(classified_raster_path):
         logger.error(f"Classified raster not found: {classified_raster_path}")
-        return
+        exit(1)
     
     # Find population raster (GHSL)
     pop_raster_pattern = f"./data/raw/ghsl/pop/{city_normalized[:3].upper()}_GHS_POP_*.tif"
@@ -117,18 +146,18 @@ def main():
             aoi_geojson = f"./data/raw/aoi/{city_normalized}_aoi.geojson"
             if not os.path.exists(aoi_geojson):
                 logger.error(f"AOI file not found: {aoi_geojson}")
-                return
+                exit(1)
             downloader = fetch_ghsl.GHSLDownloader(temp_dir="./data/raw/ghsl/temp")
-            downloaded_files = downloader.download_tiles(aoi_geojson=aoi_geojson,
+            downloaded_files = suppress_output(downloader.download_tiles, aoi_geojson=aoi_geojson,
                                                          output_dir="./data/raw/ghsl", 
                                                          data_type="pop")
             pop_raster_files = glob.glob(pop_raster_pattern)
             if not pop_raster_files:
                 logger.error(f"Failed to download population raster")
-                return
+                exit(1)
         except Exception as e:
             logger.error(f"Population raster download failed: {e}")
-            return
+            exit(1)
     
     population_raster_path = pop_raster_files[0]
     
