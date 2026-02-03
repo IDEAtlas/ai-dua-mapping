@@ -63,9 +63,11 @@ class Pipeline:
     
     def _get_loss_function(self, class_weights: list):
         """Get loss function with class weights."""
-        return sm.losses.CategoricalFocalLoss()
-        # Alternative: Dice loss
-        # return sm.losses.DiceLoss(class_weights=class_weights)
+        dice_loss = sm.losses.DiceLoss(class_weights=class_weights) 
+        focal_loss = sm.losses.CategoricalFocalLoss()
+        t_loss =  dice_loss + (2 * focal_loss)
+        # return sm.losses.CategoricalFocalLoss()
+        return t_loss
     
     def _build_model(self):
         """Build model using select_model from models/utils.py."""
