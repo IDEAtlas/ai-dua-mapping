@@ -213,6 +213,7 @@ def main():
 
     print(f"\nSaving grid to {args.output}")
     grid_to_save = grid[['patch_id', 'set', 'geometry']]
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
     grid_to_save.to_file(args.output, driver='GeoJSON')
 
     print(f"Done. Created {len(grid_to_save)} patches (after filtering and balancing).")

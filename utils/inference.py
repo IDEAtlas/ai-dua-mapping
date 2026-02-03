@@ -2,7 +2,7 @@ import numpy as np
 from tqdm import tqdm
 import rasterio as rio
 import geopandas as gpd
-from utils.dataloader import norm_s2
+from utils.dataloader import normalize_s2
 from tqdm import tqdm
 from rasterio.mask import mask
 from tqdm import tqdm
@@ -37,15 +37,16 @@ def save_raster(final_pred, reference_image_path, save_path, aoi_path):
 
         with rio.open(save_path, "w", **profile) as dst:
             dst.write(clipped_image[0], 1)
-
-        print(f"Prediction clipped to aoi and saved to: {save_path}")
+        
+        print(f"Classification map saved to: {save_path}")
     else:
         with rio.open(reference_image_path) as src:
             profile = src.profile.copy()
             profile.update(dtype=np.uint8, count=1, compress='lzw')
             with rio.open(save_path, 'w', **profile) as dst:
                 dst.write(final_pred, 1)
-        print(f"Prediction saved to: {save_path}")
+        
+        print(f"Classification map saved to: {save_path}")
 
 class PatchGenerator:
     """Generates patches from multiple modalities for sliding window inference."""
@@ -80,17 +81,19 @@ class PatchGenerator:
             input_list = [batch_patches[modality] for modality in self.modalities]
             yield input_list, batch_coords
 
-def preprocess_modality(image, modality):
-    """Preprocess input image based on modality."""
-    if modality == 'S2':
-        image = np.clip(image / 10000.0, 0.0, 1.0) if np.max(image) > 3.0 else image
-    return image
 
 def hann_window(size):
     """Generates a 2D Hann window of given size."""
     hann_1d = np.hanning(size)  # 1D Hann window
     hann_2d = np.outer(hann_1d, hann_1d)  # Convert to 2D
     return hann_2d
+
+
+def preprocess_modality(image, modality):
+    """Preprocess input image based on modality."""
+    if modality == 'S2':
+        image = np.clip(image / 10000.0, 0.0, 1.0) if np.max(image) > 3.0 else image
+    return image
 
 
 #-------------------------------------------#
@@ -103,14 +106,14 @@ def inference_mbcnn(model, image_sources, save_path, aoi_path=None, batch_size=8
     rasters = [rio.open(src).read().transpose(1, 2, 0) for src in image_sources]
     rasters[0] = np.nan_to_num(rasters[0], nan=0.0)
     
-    input1 = norm_s2(rasters[0])  # Normalize Sentinel-2 input
+    input1 = normalize_s2(rasters[0])  # Normalize Sentinel-2 input
     input2 = rasters[1]
 
-    print(f'Input 1 min: {np.min(input1)}, max: {np.max(input1)}')
-    print(f'Input 2 min: {np.min(input2)}, max: {np.max(input2)}')
-
+    # print(f'Input 1 min: {np.min(input1)}, max: {np.max(input1)}')
+    # print(f'Input 2 min: {np.min(input2)}, max: {np.max(input2)}')
+    
     # print(f'S2 shape: {input1.shape}')
-    # print(f'PBD shape: {input2.shape}')
+    # print(f'BD shape: {input2.shape}')
 
     patch_height, patch_width = model.inputs[0].shape[1:3]
     stride = int(patch_height * stride_ratio)
@@ -121,11 +124,11 @@ def inference_mbcnn(model, image_sources, save_path, aoi_path=None, batch_size=8
     count_map = np.zeros((image_height, image_width, classes), dtype=np.float32)
 
     # create a dict with insertion order matching model input order
-    image_dict = {"S2": input1, "PBD": input2} 
+    image_dict = {"S2": input1, "BD": input2} 
     dataset = PatchGenerator(image_dict, patch_height, patch_width, stride, batch_size)
     window = hann_window(patch_height)[..., np.newaxis]  # Expand dims to match prediction shape
 
-    pbar = tqdm(total=len(dataset), desc="Running Full Inference:")
+    pbar = tqdm(total=len(dataset), desc="Progress")
 
     for batch in dataset:
         input_patches, batch_coords = batch  # batch_coords is a list of (y, x) pairs
@@ -141,6 +144,7 @@ def inference_mbcnn(model, image_sources, save_path, aoi_path=None, batch_size=8
         pbar.update(1)
 
     pbar.close()
+    print()
 
     # Compute final classification map
     averaged_predictions = np.divide(y_pred, count_map, out=np.zeros_like(y_pred), where=(count_map != 0))
@@ -148,66 +152,3 @@ def inference_mbcnn(model, image_sources, save_path, aoi_path=None, batch_size=8
 
     # Save and clip the raster
     save_raster(final_pred, image_sources[0], save_path, aoi_path)
-
-
-#-------------------------------------------#
-# inference code for multi task mtcnn model
-#-------------------------------------------#
-
-def inference_mtcnn(model, image_sources, save_path, aoi_path=None, batch_size=8, stride_ratio=0.5):
-    """inference using a multi-task model"""
-    image_dict = {}
-    for modality, image_path in image_sources.items():
-        with rio.open(image_path) as src:
-            image = src.read().transpose(1, 2, 0)  # (H, W, C)
-            image = np.nan_to_num(image, nan=0.0)
-            image = [norm_s2(image) if modality == 'S2' else image][0]
-            image_dict[modality] = image
-        print(f"Input data: [{modality}: {image.shape}]")
-
-    for modality, image in image_dict.items():
-        print(f"Data Min: {np.nanmin(image)}, Data Max: {np.nanmax(image)}")
-    # Get patch size from model input shape
-    patch_height, patch_width, _ = model.inputs[0].shape[1:4]  # (batch, h, w, c)
-    stride = int(patch_height * stride_ratio)
-    
-    print(f"Patch size: {patch_height}x{patch_width}, Stride: {stride}")
-    
-    # Get image dimensions
-    ref_image = list(image_dict.values())[0]
-    image_height, image_width = ref_image.shape[:2]
-    
-    # Get number of classes from model output
-    classes = model.outputs[1].shape[-1]  # seg output
-    
-    # Initialize output arrays
-    y_pred = np.zeros((image_height, image_width, classes), dtype=np.float32)
-    count_map = np.zeros((image_height, image_width, classes), dtype=np.float32)
-
-    dataset = PatchGenerator(image_dict, patch_height, patch_width, stride, batch_size)
-    window = hann_window(patch_height)[..., np.newaxis]
-
-    pbar = tqdm(total=len(dataset), desc="Running Full Inference:")
-
-    for batch in dataset:
-        input_patches, batch_coords = batch
-        batch_predictions = model.predict(input_patches, verbose=0)
-        seg_predictions = batch_predictions[1]  # Extract segmentation output
-        
-        for i in range(len(seg_predictions)):
-            y, x = batch_coords[i]
-            patch_prediction = seg_predictions[i] * window
-            y_pred[y:y+patch_height, x:x+patch_width] += patch_prediction
-            count_map[y:y+patch_height, x:x+patch_width] += window
-        pbar.update(1)
-    
-    pbar.close()
-    
-    # Compute final classification
-    averaged_predictions = np.divide(y_pred, count_map, out=np.zeros_like(y_pred), where=(count_map != 0))
-    final_pred = np.argmax(averaged_predictions, axis=-1) + 1  # Classes start at 1
-
-    reference_path = list(image_sources.values())[0]
-    save_raster(final_pred, reference_path, save_path, aoi_path)
-
-    return save_path

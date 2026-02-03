@@ -1,35 +1,38 @@
-# Dataset modalities to be used
+# Input modality specification
 DATASET:
-  # - S1
   - S2
   - BD
-  # - VHR
 
-# Input shapes for different modalities
 IN_SHAPE:
-  S1: [128, 128, 2]
   S2: [128, 128, 10]
   BD: [128, 128, 1]
-  VHR: [512, 512, 4]
 
-# Model and Training Configuration
+# Training configuration
 N_CLASSES: 3
 LR: 0.0001
-BATCH_SIZE: 16
-N_EPOCHS: 250
-STRIDE: 0.5
+BATCH_SIZE: 4
+N_EPOCHS: 150
 MONITOR: val_loss
-PATIENCE: 20
-LOSS: categorical_crossentropy 
-OPTIMIZER: adam
-METRICS:
-  - accuracy
-  - f1_score
+MODE: min
+PATIENCE: 10
+
+# Fine-tuning configuration
+FINETUNE:
+  TYPE: full  # Options: 'full' (all layers), 'head' (decoder only)
+  N_EPOCHS: 25
+  BATCH_SIZE: 4
+  MONITOR: loss  # Monitor training loss (no val data)
+  MODE: min
+  PATIENCE: 15
+  LR_FULL: 5.0e-5   # Learning rate for full fine-tuning
+  LR_HEAD: 1.0e-4   # Learning rate for head-only fine-tuning
+
+# Inference configuration
+STRIDE_RATIO: 0.5
 
 # Paths
-# DATA_PATH: /data/ideabench/extra/sentinel/
-DATA_PATH: /data/ideabench/main/v2/
+DATA_PATH: ./data/processed/
 CHECKPOINT_PATH: ./checkpoint/
 LOG_PATH: ./log/
-PREDICTION_PATH: /data/output/prediction/
-AOI_PATH: /data/raw/aoi/
+PREDICTION_PATH: ./output/
+AOI_PATH: ./data/raw/aoi/

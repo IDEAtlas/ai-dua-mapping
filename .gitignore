@@ -1,4 +1,4 @@
-input/
+data/
 checkpoint/
 log/
 output/
@@ -133,12 +133,10 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
-# Environments
+# Environments8
 .env
 .venv
-env/
 venv/
-ENV/
 env.bak/
 venv.bak/
 

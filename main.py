@@ -1,171 +1,250 @@
-# Training, testing and inference pipeline 
+#!/usr/bin/env python3
+"""
+Unified entry point for training, fine-tuning, and classification workflows.
 
-import os
+Usage:
+    # Train from scratch
+    python main.py --task train --city Salvador --country Brazil --year 2025
+    
+    # Fine-tune with pre-trained weights
+    python main.py --task finetune --city Salvador --country Brazil --year 2025 (default global model weights)
+    python main.py --task finetune --city Salvador --country Brazil --year 2025 --weights checkpoint/custom.h5
+    
+    # Generate segmentation maps (classification/inference)
+    python main.py --task classify --city Salvador --country Brazil --year 2025 (applies the specified city's weights)
+    python main.py --task classify --city Salvador --country Brazil --year 2025 --weights checkpoint/custom.h5
+"""
+
+import subprocess
+import sys
 import argparse
-from utils.configs import Config
-from utils.callbacks import build_callbacks
-import tensorflow as tf
-from models.utils import select_model
-import losses
-import segmentation_models as sm
-from utils import dataloader as dl
+import logging
+import os
+from datetime import datetime
 
-import math
+# Import configs early to set environment variables
+from utils.configs import load_configs
+load_configs('config.yaml')
 
-parser = argparse.ArgumentParser(description="Train, evaluate or save a deep learning model.")
-parser.add_argument("--stage", choices=["train", "test", "infer"], required=True, help="Select mode: train, test or save")
-parser.add_argument("--city", type=str, required=True, help="Specify the city name")
-parser.add_argument("--model", type=str, required=True, choices=['unet', 'fcndk6', 'deeplab', 'glavitu', 'mbcnn', 'lightunet', 'fpn'], 
-                    help="Choose one of the model to use")
-parser.add_argument("--s2", type=str, required=False, help="Sentinel-2 image path (only for inference)")
-parser.add_argument("--bd", type=str, required=False, help="Building density raster path (only for inference)")
-parser.add_argument("--weight", type=str, required=False, help="Specify path to the model weight")
+# Import orchestrator
+from utils.pipelines import Pipeline
 
-args = parser.parse_args()
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 
-def print_info(name, data):
-    if isinstance(data, list):  # Multiple inputs (list of arrays)
-        print(f"{name} Shape: {[d.shape for d in data]}")
-    else:  # Single input case
-        print(f"{name} Shape: {data.shape}")
-
-config = Config('config.yaml')
-
-city = args.city
-dir = os.path.join(config.DATA_PATH, city)
-inputs = ".".join(config.DATASET)
-
-input_shapes = {input: config.IN_SHAPE[input] for input in config.DATASET}
-h, w, _ = config.IN_SHAPE[config.DATASET[0]]
-
-
-if args.stage == "train":
-
-    print('Training model on', city.capitalize(), 'dataset')
-    print('Input modality: ', config.DATASET)
-
-    train_images = [dl.load_data(os.path.join(dir, 'train'), config.PATCH_SIZE, input) for input in config.DATASET]
-    val_images = [dl.load_data(os.path.join(dir, 'val'), config.PATCH_SIZE, input) for input in config.DATASET]
-
-    if len(config.DATASET) == 1:
-        train_images = train_images[0]
-        val_images = val_images[0]
-
-    train_label = dl.load_data(os.path.join(dir, 'train'), config.PATCH_SIZE, 'RF', config.N_CLASSES)
-    val_label = dl.load_data(os.path.join(dir, 'val'), config.PATCH_SIZE, 'RF', config.N_CLASSES)
-
-    print_info("Train Images", train_images)
-    print_info("Validation Images", val_images)
-    print_info("Train Label", train_label)
-    print_info("Validation Label", val_label)
-
-    cl_weights = dl.calculate_class_weights(train_label)
-    print(f'Class weight: {cl_weights}')
-    
-    dice_loss = sm.losses.DiceLoss(class_weights=cl_weights) 
-    focal_loss = sm.losses.CategoricalFocalLoss()
-    t_loss =  dice_loss + (2 * focal_loss)
-    j_loss = sm.losses.JaccardLoss(class_weights=cl_weights, class_indexes=None, per_image=False, smooth=1e-05)
-    
-    # dice_focal = losses.CombinedDiceFocalLoss(class_idx = 2, gamma=2.0, alpha=0.25, dice_weight=0.25, focal_weight=0.75, class_weights=cl_weights)
-    # focal = losses.FocalLoss(gamma=2.0, alphas=0.25)
-
-    model = select_model(args.model, config)
-    print(f'Model -> {model.name.upper()} | Parameters -> {model.count_params():,}')
-    
-
-    model.compile(
-    optimizer=tf.keras.optimizers.Adam(learning_rate=config.LR),
-    loss=t_loss,
-    metrics=[sm.metrics.FScore(name='f1')]         
+def parse_arguments():
+    """Parse command-line arguments for all tasks."""
+    parser = argparse.ArgumentParser(
+        description="Unified workflow for training, fine-tuning, and classification of building detection models.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-
-    if not os.path.exists(config.CHECKPOINT_PATH):
-        os.makedirs(config.CHECKPOINT_PATH)
-
-    if not os.path.exists(config.LOG_PATH):
-        os.makedirs(config.LOG_PATH)
-
-    callbacks = build_callbacks(city, inputs, model, train_images[0], config)
-
-    model.fit(train_images, train_label,
-            batch_size=config.BATCH_SIZE,
-            steps_per_epoch = math.ceil(len(train_label) / config.BATCH_SIZE),
-            epochs=config.N_EPOCHS,
-            callbacks=callbacks,
-            validation_data=(val_images, val_label),
-            validation_steps = len(val_label) // config.BATCH_SIZE,
-            verbose=0)
-                
-elif args.stage == "test":
-    import metrics
-    print('Evaluating model on', city.capitalize(), 'dataset \n')
-    print('Input modality: ', config.DATASET)
-
-    model = select_model(args.model, config)
-    weight = args.weight if args.weight else (f'./{config.CHECKPOINT_PATH}/{city}.{inputs.lower()}.{model.name}.weights.h5')
-    print(f'Model weight: {weight}')
-
-    if not os.path.exists(weight):
-        raise FileNotFoundError(f"Weight file not found: {weight}")
-    model.load_weights(weight)
-
-    test_images = [dl.load_data(os.path.join(dir, 'test'), config.PATCH_SIZE, input) for input in config.DATASET]
-    if len(config.DATASET) == 1:
-        test_images = test_images[0]
-
-    test_label = dl.load_data(os.path.join(dir, 'test'), config.PATCH_SIZE, 'RF', config.N_CLASSES)
-
-    print_info("Test Images", test_images)
-    print_info("Test Label", test_label)
-
-    report, conf_matrix, iou_scores, mean_iou, fwiou = metrics.class_report(test_images, test_label, model)
-
-    print("Classification Report:\n", report)
-    print("IoU Scores per Class:\n", iou_scores)
-    print(f"Mean IoU: {mean_iou:.4f}")
-    print(f"Frequency Weighted IoU: {fwiou:.4f}")
-
-
-elif args.stage == "infer":
-    from utils.inference import inference_mbcnn
-    print('Predicting on', city.capitalize(), 'dataset \n')
-
-    image_sources = []
-    for modality in config.DATASET:
-        if modality == 'S2' and args.s2:
-            image_sources.append(args.s2)
-        elif modality == 'BD' and args.bd:
-            image_sources.append(args.bd)
-
-    missing_modalities = set(config.DATASET) - set([ 'S2' if args.s2 else '', 'BD' if args.bd else ''])
-    if missing_modalities:
-        print(f"Missing required inputs: {missing_modalities}")
-        exit(1)
-    else:
-        print(f"Using input modalities: {config.DATASET}")
-
-    year = args.s2.split('/')[-1].split('_')[1].split('.')[0]
-    print(f'Year: {year}')
-
-    model = select_model(args.model, config)
-
-    if not args.weight:
-        print("Model weight file not provided. Use --weight to specify the path.")
-        exit(1)
-    if os.path.exists(args.weight):
-        model.load_weights(args.weight)
-        print("Model weights loaded")
-    else:
-        print(f"Model weight file not found: {args.weight}")
-        exit(1)
-
-    inference = inference_mbcnn(
-        model=model,
-        image_sources=image_sources,
-        save_path=f'{config.PREDICTION_PATH}/{city}.{inputs.lower()}.{model.name}.{year}.tif',
-        aoi_path=os.path.join(config.AOI_PATH, f"{city}_aoi.geojson"),
-        batch_size=config.BATCH_SIZE,
-        stride_ratio=config.STRIDE
+    
+    parser.add_argument(
+        "--task",
+        type=str,
+        required=True,
+        choices=["train", "finetune", "classify", "sdg_stats"],
+        help="Task type: 'train' (full dataset), 'finetune' (limited data with pre-trained weights), 'classify' (inference only), 'sdg_stats' (compute SDG statistics)"
     )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="mbcnn",
+        choices=["mbcnn", "unet", "lightunet", "fcndk6", "fpn", "deeplab", "glavitu"],
+        help="Model architecture (default: mbcnn)"
+    )
+    parser.add_argument("--city", type=str, required=True, help="City name (e.g., Salvador, Cape-Town)")
+    parser.add_argument("--country", type=str, required=True, help="Country name (e.g., Brazil, South-Africa)")
+    parser.add_argument("--year", type=int, required=True, help="Year for data collection (e.g., 2025)")
+    parser.add_argument(
+        "--weights",
+        type=str,
+        default=None,
+        help="Path to initial weights file (optional, for finetune/classify tasks)"
+    )
+    parser.add_argument(
+        "--sdg_stats",
+        action="store_true",
+        help="Compute SDG 11.1.1 statistics after classification (optional)"
+    )
+    
+    return parser.parse_args()
+
+
+def normalize_city_name(city: str, country: str) -> str:
+    """Normalize city and country names for file paths."""
+    return f"{city}_{country}".lower().replace(" ", "_").replace("-", "_")
+
+
+def run_workflow_train(city: str, country: str, year: int, city_normalized: str, model: str = "mbcnn") -> int:
+    """Run training workflow: prepare → train → test"""
+    logger.info("TRAINING WORKFLOW START")
+    logger.info(f"City: {city.capitalize()}, Country: {country.capitalize()}, Year: {year}, Model: {model.upper()}")
+    
+    # Step 1: Prepare data
+    processed_dir = os.path.join("./data/processed/", city_normalized)
+    if os.path.exists(processed_dir) and os.path.exists(os.path.join(processed_dir, "train")):
+        logger.info("[1/3] Data preparation skipped. Processed data already exists. Delete the processed folder to start from scratch.")
+    else:
+        logger.info("[1/3] Preparing Data...")
+        result = subprocess.run([
+            sys.executable, "-m", "preprocessing.prepare_data",
+            "--city", city,
+            "--country", country,
+            "--year", str(year),
+            "--caller", "train"
+        ], check=False)
+        
+        if result.returncode != 0:
+            logger.error("[1/3] Preparing Data - FAILED!")
+            return 1
+    
+    # Step 2: Train
+    logger.info("[2/3] Training Model...")
+    try:
+        pipeline = Pipeline(stage="train", city=city_normalized, model=model)
+        pipeline.run()
+    except Exception as e:
+        logger.error(f"[2/3] Training Model - FAILED! {e}")
+        return 1
+    
+    # Step 3: Test
+    logger.info("[3/3] Evaluating Model...")
+    try:
+        pipeline = Pipeline(stage="test", city=city_normalized, model=model)
+        pipeline.run()
+    except Exception as e:
+        logger.error(f"[3/3] Evaluating Model - FAILED! {e}")
+        return 1
+    
+    logger.info("TRAINING WORKFLOW COMPLETED")
+    return 0
+
+
+def run_workflow_finetune(city: str, country: str, year: int, city_normalized: str, weights: str = None, model: str = "mbcnn") -> int:
+    """Run fine-tuning workflow: prepare → finetune"""
+    logger.info("FINE-TUNING WORKFLOW START")
+    logger.info(f"City: {city.capitalize()}, Country: {country.capitalize()}, Year: {year}, Model: {model.upper()}")
+    if weights:
+        logger.info(f"Using initial weights: {weights}")
+    
+    # Step 1: Prepare data
+    logger.info("[1/2] Preparing Data...")
+    result = subprocess.run([
+        sys.executable, "-m", "preprocessing.prepare_data",
+        "--city", city,
+        "--country", country,
+        "--year", str(year),
+        "--caller", "finetune"
+    ], check=False)
+    
+    if result.returncode != 0:
+        logger.error("[1/2] Preparing Data - FAILED!")
+        return 1
+    
+    # Step 2: Fine-tune model
+    logger.info("[2/2] Fine-tuning Model...")
+    try:
+        pipeline = Pipeline(stage="finetune", city=city_normalized, weight=weights, model=model)
+        pipeline.run()
+    except Exception as e:
+        logger.error(f"[2/2] Fine-tuning Model - FAILED! {e}")
+        return 1
+    
+    logger.info("FINE-TUNING WORKFLOW COMPLETED")
+    return 0
+
+
+def run_workflow_classify(city: str, country: str, year: int, city_normalized: str, weights: str = None, model: str = "mbcnn") -> int:
+    """Run classification workflow: prepare → infer"""
+    logger.info("CLASSIFICATION WORKFLOW START")
+    logger.info(f"City: {city.capitalize()}, Country: {country.capitalize()}, Year: {year}, Model: {model.upper()}")
+    if weights:
+        logger.info(f"Using model weights: {weights}")
+    
+    # Step 1: Prepare data
+    logger.info("[1/2] Preparing Data...")
+    result = subprocess.run([
+        sys.executable, "-m", "preprocessing.prepare_data",
+        "--city", city,
+        "--country", country,
+        "--year", str(year),
+        "--caller", "classify"
+    ], check=False)
+    
+    if result.returncode != 0:
+        logger.error("[1/2] Preparing Data - FAILED!")
+        return 1
+    
+    # Step 2: Run classification
+    logger.info("[2/2] Running Classification...")
+    s2_img = f"./data/raw/sentinel/{city_normalized}/S2_{year}.tif"
+    bd_path = f"./data/raw/buildings/density/{city_normalized}_bd.tif"
+    
+    try:
+        pipeline = Pipeline(stage="infer", city=city_normalized, s2=s2_img, bd=bd_path, weight=weights, model=model)
+        pipeline.run()
+    except Exception as e:
+        logger.error(f"[2/2] Running Classification - FAILED! {e}")
+        return 1
+
+
+def run_workflow_sdg_stats(city: str, country: str, year: int, city_normalized: str, model: str = "mbcnn") -> int:
+    """Run SDG statistics computation workflow."""
+    logger.info("SDG STATISTICS WORKFLOW START")
+    logger.info(f"City: {city.capitalize()}, Country: {country.capitalize()}, Year: {year}")
+    
+    # Step 1: Compute SDG statistics
+    logger.info("[1/1] Computing SDG Statistics...")
+    try:
+        pipeline = Pipeline(stage="sdg_stats", city=city_normalized, model=model, year=year)
+        pipeline.run()
+    except Exception as e:
+        logger.error(f"[1/1] Computing SDG Statistics - FAILED! {e}")
+        return 1
+    
+    logger.info("SDG STATISTICS WORKFLOW COMPLETED")
+    return 0
+
+
+def main():
+    """Main entry point."""
+    args = parse_arguments()
+    
+    city_normalized = normalize_city_name(args.city, args.country)
+    
+    # Route to appropriate workflow
+    if args.task == "train":
+        return_code = run_workflow_train(args.city, args.country, args.year, city_normalized, args.model)
+    elif args.task == "finetune":
+        return_code = run_workflow_finetune(args.city, args.country, args.year, city_normalized, args.weights, args.model)
+    elif args.task == "classify":
+        return_code = run_workflow_classify(args.city, args.country, args.year, city_normalized, args.weights, args.model)
+        
+        # Compute SDG stats if requested
+        if return_code == 0 and args.sdg_stats:
+            logger.info("[3/3] Computing SDG Statistics...")
+            try:
+                pipeline = Pipeline(stage="sdg_stats", city=city_normalized)
+                pipeline.run()
+                logger.info("SDG Statistics computation completed")
+            except Exception as e:
+                logger.error(f"[3/3] Computing SDG Statistics - FAILED! {e}")
+                return_code = 1
+    elif args.task == "sdg_stats":
+        return_code = run_workflow_sdg_stats(args.city, args.country, args.year, city_normalized, args.model)
+    else:
+        logger.error(f"Unknown task: {args.task}")
+        return_code = 1
+    
+    sys.exit(return_code)
+
+
+if __name__ == "__main__":
+    main()

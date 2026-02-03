@@ -1,0 +1,26 @@
+name: ideatlas
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - gdal
+  - libgdal
+  - proj
+  - fiona=1.9.6
+  - geopandas
+  - xarray
+  - dask
+  - pandas
+  - matplotlib
+  - tqdm
+  - s2sphere
+  - rioxarray
+  - rasterstats
+  - pip
+  - pip:
+      - tensorflow==2.13.0
+      - pystac-client
+      - planetary-computer
+      - stackstac
+      - segmentation-models
