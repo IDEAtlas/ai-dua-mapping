@@ -16,12 +16,27 @@ IDEAtlas collaborates with early adopters in eight pilot cities across four cont
 - Mumbai, India
 - Jakarta, Indonesia
 
+We are currently expanding our reach and are already actively working in additional cities together with local partners, which includes:
+
+- Tegucigalpa, Honduras
+- Guatemala City, Guatemala
+- Bissau, Guinea-Bissau
+- Pereira, Colombia
+- Rio de Janeiro, Brazil
+- Kisumu, Kenya
+- San Jose, Costa Rica
+- Kigali, Rwanda
+- Johannesburg, South Africa
+- Juba, South Sudan
+
+Further expansion is underway in additional urban centers, with active initiatives being launched in key cities across Latin America, Africa, and beyond to broaden our global impact.
+
 <p align="center">
 <img width="850" alt="image" src="https://github.com/user-attachments/assets/649ee0ba-3b18-4bb5-9c86-dff7d7c4838f" />
 </p>
 
 
-Fig. 1: Case Study Cities
+Case Study Cities
 
 The IDEAtlas team comprises experts from leading scientific and industrial organizations:
 
@@ -42,7 +57,7 @@ For each city, the input for the model was constructed from four data sources, a
 
 ![datasource](https://github.com/user-attachments/assets/65bb5856-e2c3-449e-bad2-3bac8aa5b085)
 
-Fig. 2: Input data to train the AI model
+Input data to train the AI model
 
 The benchmark dataset can be freely downloaded from Data Archiving and Networked Services (DANS) using the following link: https://doi.org/10.17026/PT/X4NJII
 
@@ -55,7 +70,7 @@ To enhance computational efficiency and reduce model complexity, we reduced the 
 ![MBCNN](https://github.com/user-attachments/assets/c494da59-6601-4567-941c-ca4601e85f77)
 
 
-Fig. 3: Model architecture
+MB-CNN model architecture
 
 
 ## Using the code
