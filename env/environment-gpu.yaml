@@ -20,6 +20,7 @@ dependencies:
   - s2sphere
   - rioxarray
   - rasterstats
+  - scikit-learn
   - pip
   - pip:
       - tensorflow==2.13.0
