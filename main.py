@@ -13,6 +13,9 @@ Usage:
     # Generate segmentation maps (classification/inference)
     python main.py --task classify --city Salvador --country Brazil --year 2025 (applies the specified city's weights)
     python main.py --task classify --city Salvador --country Brazil --year 2025 --weights checkpoint/custom.h5
+
+    # Compute SDG 11.1.1 statistics
+    python main.py --task sdg_stats --city Salvador --country Brazil --year 2025
 """
 
 import subprocess
@@ -24,7 +27,7 @@ from datetime import datetime
 
 # Import configs early to set environment variables
 from utils.configs import load_configs
-load_configs('config.yaml')
+cfg = load_configs('config.yaml')
 
 # Import orchestrator
 from utils.pipelines import Pipeline
@@ -68,12 +71,6 @@ def parse_arguments():
         default=None,
         help="Path to initial weights file (optional, for finetune/classify tasks)"
     )
-    parser.add_argument(
-        "--sdg_stats",
-        action="store_true",
-        help="Compute SDG 11.1.1 statistics after classification (optional)"
-    )
-    
     return parser.parse_args()
 
 
@@ -88,7 +85,7 @@ def run_workflow_train(city: str, country: str, year: int, city_normalized: str,
     logger.info(f"City: {city.capitalize()}, Country: {country.capitalize()}, Year: {year}, Model: {model.upper()}")
     
     # Step 1: Prepare data
-    processed_dir = os.path.join("./data/processed/", city_normalized)
+    processed_dir = os.path.join(cfg.PROCESSED_DATA_PATH, city_normalized)
     if os.path.exists(processed_dir) and os.path.exists(os.path.join(processed_dir, "train")):
         logger.info("[1/3] Data preparation skipped. Processed data already exists. Delete the processed folder to start from scratch.")
     else:
@@ -135,14 +132,19 @@ def run_workflow_finetune(city: str, country: str, year: int, city_normalized: s
         logger.info(f"Using initial weights: {weights}")
     
     # Step 1: Prepare data
-    logger.info("[1/2] Preparing Data...")
-    result = subprocess.run([
-        sys.executable, "-m", "preprocessing.prepare_data",
-        "--city", city,
-        "--country", country,
-        "--year", str(year),
-        "--caller", "finetune"
-    ], check=False)
+    processed_dir = os.path.join(cfg.PROCESSED_DATA_PATH, city_normalized)
+    if os.path.exists(processed_dir) and os.path.exists(os.path.join(processed_dir, "train")):
+        logger.info("[1/2] Data preparation skipped. Processed data already exists. Delete the processed folder to start from scratch.")
+        result = subprocess.CompletedProcess(args=[], returncode=0)
+    else:
+        logger.info("[1/2] Preparing Data...")
+        result = subprocess.run([
+            sys.executable, "-m", "preprocessing.prepare_data",
+            "--city", city,
+            "--country", country,
+            "--year", str(year),
+            "--caller", "finetune"
+        ], check=False)
     
     if result.returncode != 0:
         logger.error("[1/2] Preparing Data - FAILED!")
@@ -184,8 +186,8 @@ def run_workflow_classify(city: str, country: str, year: int, city_normalized: s
     
     # Step 2: Run classification
     logger.info("[2/2] Running Classification...")
-    s2_img = f"./data/raw/sentinel/{city_normalized}/S2_{year}.tif"
-    bd_path = f"./data/raw/buildings/density/{city_normalized}_bd.tif"
+    s2_img = os.path.join(cfg.RAW_DATA_PATH, "sentinel", city_normalized, f"S2_{year}.tif")
+    bd_path = os.path.join(cfg.RAW_DATA_PATH, "buildings/density", f"{city_normalized}_bd.tif")
     
     try:
         pipeline = Pipeline(stage="infer", city=city_normalized, s2=s2_img, bd=bd_path, weight=weights, model=model)
@@ -226,17 +228,6 @@ def main():
         return_code = run_workflow_finetune(args.city, args.country, args.year, city_normalized, args.weights, args.model)
     elif args.task == "classify":
         return_code = run_workflow_classify(args.city, args.country, args.year, city_normalized, args.weights, args.model)
-        
-        # Compute SDG stats if requested
-        if return_code == 0 and args.sdg_stats:
-            logger.info("[3/3] Computing SDG Statistics...")
-            try:
-                pipeline = Pipeline(stage="sdg_stats", city=city_normalized)
-                pipeline.run()
-                logger.info("SDG Statistics computation completed")
-            except Exception as e:
-                logger.error(f"[3/3] Computing SDG Statistics - FAILED! {e}")
-                return_code = 1
     elif args.task == "sdg_stats":
         return_code = run_workflow_sdg_stats(args.city, args.country, args.year, city_normalized, args.model)
     else:
