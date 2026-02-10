@@ -31,8 +31,9 @@ FINETUNE:
 STRIDE_RATIO: 0.5
 
 # Paths
-DATA_PATH: ./data/processed/
+RAW_DATA_PATH: ./data/raw/
+PROCESSED_DATA_PATH: ./data/processed/
+AOI_PATH: ./data/raw/aoi/
 CHECKPOINT_PATH: ./checkpoint/
 LOG_PATH: ./log/
 PREDICTION_PATH: ./output/
-AOI_PATH: ./data/raw/aoi/
