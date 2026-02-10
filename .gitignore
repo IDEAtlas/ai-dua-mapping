@@ -1,7 +1,19 @@
 data/
+!data/.gitkeep
+!data/processed/.gitkeep
+!data/raw/.gitkeep
+!data/raw/aoi/.gitkeep
+!data/raw/buildings/.gitkeep
+!data/raw/ghsl/.gitkeep
+!data/raw/reference_data/.gitkeep
+!data/raw/sampling_grid/.gitkeep
+!data/raw/sentinel/.gitkeep
 checkpoint/
+!checkpoint/.gitkeep
 log/
+!log/.gitkeep
 output/
+!output/.gitkeep
 installers/
 core/
 # Byte-compiled / optimized / DLL files
