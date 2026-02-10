@@ -10,6 +10,7 @@ data/
 !data/raw/sentinel/.gitkeep
 checkpoint/
 !checkpoint/.gitkeep
+!checkpoint/global*
 log/
 !log/.gitkeep
 output/
