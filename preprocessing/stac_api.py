@@ -203,7 +203,7 @@ def main(geojson_path, start_date, end_date, max_cloud_cover, output_path, outpu
     print("\nProcessing complete.")
 
 
-def process_sentinel2_stack(city: str, year: int, basedir: str = "./data/raw", max_cloud_cover: int = 20, 
+def process_sentinel2_stack(city: str, year: int, basedir: str, max_cloud_cover: int = 20, 
                             output_epsg = 4326, bands_to_process = None) -> str:
     """
     Wrapper function to process Sentinel-2 data for a given city and year.
