@@ -7,6 +7,7 @@ import logging
 import warnings
 from tqdm import tqdm
 from . import adm_boundaries, stac_api, fetch_ghsl, create_ref, extract_patch, create_density, google_buildings
+from utils.configs import load_configs
 
 # Setup logging with consistent format - force=True ensures it applies even if logging is configured elsewhere
 logging.basicConfig(
@@ -16,6 +17,9 @@ logging.basicConfig(
     force=True
 )
 logger = logging.getLogger(__name__)
+
+# Load config
+cfg = load_configs('config.yaml')
 
 # Suppress verbose loggers from imported modules
 logging.getLogger('rasterio').setLevel(logging.WARNING)
@@ -74,8 +78,8 @@ country = args.country.lower()
 year = args.year
 cloud_cover = args.cloud_cover
 caller = args.caller  # 'train', 'finetune', 'classify'
-output_dir = 'data/raw'
-output_patches_root = 'data/processed'
+output_dir = cfg.RAW_DATA_PATH
+output_patches_root = cfg.PROCESSED_DATA_PATH
 
 # Log task type silently (no need to print decorative headers)
 
