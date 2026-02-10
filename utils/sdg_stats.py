@@ -11,6 +11,7 @@ import glob
 import warnings
 import urllib3
 from preprocessing import fetch_ghsl, adm_boundaries
+from utils.configs import load_configs
 
 # Suppress urllib3 warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -21,6 +22,9 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# Load config
+cfg = load_configs('config.yaml')
 
 
 def suppress_output(func, *args, **kwargs):
@@ -131,25 +135,25 @@ def main():
     city_normalized = f"{args.city}_{args.country}".lower().replace(" ", "_").replace("-", "_")
     
     # Find classified raster with model name
-    classified_raster_path = f"./output/{city_normalized}.s2.bd.{args.model}.{args.year}.tif"
+    classified_raster_path = os.path.join(cfg.PREDICTION_PATH, f"{city_normalized}.s2.bd.{args.model}.{args.year}.tif")
     if not os.path.exists(classified_raster_path):
         logger.error(f"Classified raster not found: {classified_raster_path}")
         exit(1)
     
     # Find population raster (GHSL)
-    pop_raster_pattern = f"./data/raw/ghsl/pop/{city_normalized[:3].upper()}_GHS_POP_*.tif"
+    pop_raster_pattern = os.path.join(cfg.RAW_DATA_PATH, f"ghsl/pop/{city_normalized[:3].upper()}_GHS_POP_*.tif")
     pop_raster_files = glob.glob(pop_raster_pattern)
     if not pop_raster_files:
         logger.info(f"Population raster not found. Downloading from GHSL...")
         # Download population data if not found
         try:
-            aoi_geojson = f"./data/raw/aoi/{city_normalized}_aoi.geojson"
+            aoi_geojson = os.path.join(cfg.AOI_PATH, f"{city_normalized}_aoi.geojson")
             if not os.path.exists(aoi_geojson):
                 logger.error(f"AOI file not found: {aoi_geojson}")
                 exit(1)
-            downloader = fetch_ghsl.GHSLDownloader(temp_dir="./data/raw/ghsl/temp")
+            downloader = fetch_ghsl.GHSLDownloader(temp_dir=os.path.join(cfg.RAW_DATA_PATH, "ghsl/temp"))
             downloaded_files = suppress_output(downloader.download_tiles, aoi_geojson=aoi_geojson,
-                                                         output_dir="./data/raw/ghsl", 
+                                                         output_dir=os.path.join(cfg.RAW_DATA_PATH, "ghsl"), 
                                                          data_type="pop")
             pop_raster_files = glob.glob(pop_raster_pattern)
             if not pop_raster_files:
