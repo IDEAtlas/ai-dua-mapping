@@ -52,7 +52,7 @@ class Pipeline:
         self.year = year
         
         # Setup paths
-        self.data_dir = os.path.join(self.config.DATA_PATH, city)
+        self.data_dir = os.path.join(self.config.PROCESSED_DATA_PATH, city)
         self.inputs = ".".join(self.config.DATASET)
         self.input_shapes = {inp: self.config.IN_SHAPE[inp] for inp in self.config.DATASET}
         
@@ -260,7 +260,7 @@ class Pipeline:
         if not self.weight:
             self.weight = os.path.join(
                 self.config.CHECKPOINT_PATH,
-                f"{self.city}.{self.inputs.lower()}.{model.name}.weights.h5"
+                'global.s2.bd.mbcnn.weights.h5'
             )
         
         if not os.path.exists(self.weight):
