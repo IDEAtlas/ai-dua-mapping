@@ -73,7 +73,7 @@ To enhance computational efficiency and reduce model complexity, we reduced the 
 MB-CNN model architecture
 
 
-## Using the code
+# Using the code
 
 Clone the repository:
 ```bash
@@ -84,6 +84,10 @@ cd ai-dua-mapping
 ```
 
 **Option 1: Using Conda**
+
+Install Anaconda by downloading it from https://repo.anaconda.com/archive/
+
+Create the Environment
 
 For CPU:
 ```bash
@@ -99,6 +103,11 @@ Activate the environment:
 ```bash
 conda activate ideatlas
 ```
+Set library paths to ensure graphics libraries are found (for GPU users only):
+```bash
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+```
+
 
 **Option 2: Using Docker**
 
@@ -122,7 +131,20 @@ Enter the container:
 docker exec -it ideatlas bash
 ```
 
-Configure settings by editing `config.yaml` with your desired model parameters if needed.
+# Running the workflows
+**Note:** For training and fine tuning workflows, users must provide local DUA reference data in
+vector format.
+- Place the file inside data/raw/reference_data/ directory and named as follows:
+city_country_reference_year_version.fileformat
+- If the user have a predefined area of extent (AOI) it should be placed under
+data/raw/aoi/ and named as follows: city_country_aoi_fileformat
+
+**Example for Nairobi, Kenya**
+- data/raw/reference_data/nairobi_kenya_reference_2024_v1.geojson
+- data/raw/aoi/nairobi_kenya_aoi.geojson
+
+All other required data (Sentinel 2 imagery, building footprints, population grids) are
+automatically downloaded and processed by the data preparation pipeline.
 
 ## Training from Scratch
 Train a new model on complete dataset:
@@ -156,7 +178,8 @@ Compute SDG 11.1.1 statistics from classified rasters:
 python main.py --task sdg_stats --city nairobi --country kenya --year 2025
 ```
 
-**Note**: Users can customize the acquisition period of Sentinel 2 data in the preprocessing scripts located in the `preprocessing/` directory (e.g., `stac_api.py`).
+**Optional**: Configure settings by editing `config.yaml` to change model and training parameters. in addition
+Users can customize the acquisition period of Sentinel 2 data in the corresponding preprocessing script (stac_api.py).
 
 ---
 
