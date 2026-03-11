@@ -131,7 +131,7 @@ Enter the container:
 docker exec -it ideatlas bash
 ```
 
-# Running Tasks
+# Running the workflows
 **Note:** For training and fine tuning tasks, users must provide local DUA reference data in
 vector format.
 - Place the file inside data/raw/reference_data/ directory and named as follows:
