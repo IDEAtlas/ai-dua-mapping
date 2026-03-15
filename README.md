@@ -132,7 +132,7 @@ docker exec -it ideatlas bash
 ```
 
 # Running the workflows
-**Note:** For training and fine tuning tasks, users must provide local DUA reference data in
+For training and fine tuning tasks, users must provide local DUA reference data in
 vector format.
 - Place the file inside data/raw/reference_data/ directory and named as follows:
 city_country_reference_year_version.fileformat
@@ -145,6 +145,8 @@ data/raw/aoi/ and named as follows: city_country_aoi_fileformat
 
 All other required data (Sentinel 2 imagery, building footprints, population grids) are
 automatically downloaded and processed by the data preparation pipeline.
+
+**Note:** For citeis with morethan one word use hyphen to separate the words. Eg. San-Jose, Costa-Rica
 
 ## Training from Scratch
 Train a new model on complete dataset:
@@ -178,8 +180,7 @@ Compute SDG 11.1.1 statistics from classified rasters:
 python main.py --task sdg_stats --city nairobi --country kenya --year 2025
 ```
 
-**Optional**: Configure settings by editing `config.yaml` to change model and training parameters. in addition
-Users can customize the acquisition period of Sentinel 2 data in the corresponding preprocessing script (stac_api.py).
+**Optional**: Modify `config.yaml` to configure model and training parameters such as architecture, hyperparameters, and data paths.
 
 ---
 
