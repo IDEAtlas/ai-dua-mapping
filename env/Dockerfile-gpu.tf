@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir \
     geopandas fiona==1.9.6 \
     rioxarray s2sphere \
     dask xarray rasterstats \
-    pystac-client planetary-computer stackstac
+    pystac-client odc-stac
 
 # ML/AI packages
 RUN pip install --no-cache-dir \

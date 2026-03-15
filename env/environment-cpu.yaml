@@ -22,6 +22,5 @@ dependencies:
   - pip:
       - tensorflow==2.13.0
       - pystac-client
-      - planetary-computer
-      - stackstac
+      - odc-stac
       - segmentation-models
