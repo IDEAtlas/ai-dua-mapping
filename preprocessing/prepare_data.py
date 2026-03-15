@@ -56,12 +56,6 @@ def parse_arguments():
     )
     
     parser.add_argument(
-        "--cloud-cover",
-        type=int,
-        default=20,
-        help="Maximum cloud cover percentage for Sentinel-2 data (default: 20)"
-    )
-    parser.add_argument(
         "--caller",
         type=str,
         choices=["train", "finetune", "classify"],
@@ -76,12 +70,9 @@ args = parse_arguments()
 city = args.city.lower()
 country = args.country.lower()
 year = args.year
-cloud_cover = args.cloud_cover
 caller = args.caller  # 'train', 'finetune', 'classify'
 output_dir = cfg.RAW_DATA_PATH
 output_patches_root = cfg.PROCESSED_DATA_PATH
-
-# Log task type silently (no need to print decorative headers)
 
 # Suppress subprocess output function
 def suppress_output(func, *args, **kwargs):
@@ -93,11 +84,9 @@ def suppress_output(func, *args, **kwargs):
     try:
         sys.stdout = open(os.devnull, 'w')
         sys.stderr = open(os.devnull, 'w')
-        # Suppress all logging while executing the function
         logging.getLogger().setLevel(logging.CRITICAL)
         return func(*args, **kwargs)
     except Exception as e:
-        # Always print errors 
         sys.stdout = old_stdout
         sys.stderr = old_stderr
         logging.getLogger().setLevel(old_level)
@@ -145,8 +134,8 @@ if os.path.exists(os.path.join(output_dir, "sentinel", city_normalized, f"S2_{ye
     s2_img = os.path.join(output_dir, "sentinel", city_normalized, f"S2_{year}.tif")
 else:
     try:
-        s2_img = suppress_output(stac_api.process_sentinel2_stack, 
-                                 city_normalized, year=year, basedir=output_dir, max_cloud_cover=cloud_cover)
+        s2_img = suppress_output(stac_api.get_s2, 
+                                 city_normalized, year=year, basedir=output_dir)
     except Exception as e:
         logger.error("Sentinel-2 data not found")
         progress.close()
@@ -206,7 +195,6 @@ else:
         version_str = path_duas.split("_v")[-1].split(".")[0]  # Extract version number
         output_reference = os.path.join(output_dir, f"reference_data/{city_normalized}_reference_{year}_v{version_str}.tif")
         
-        # Call create_reference with output suppressed
         try:
             suppress_output(create_ref.create_reference, s2_img, ghsl_built_file, path_duas, output_reference)
         except Exception as e:
@@ -268,7 +256,6 @@ if caller != "classify":
             "--aoi", aoi_geojson,
         ]
 
-        # Suppress subprocess output
         grid = subprocess.run(cmd, capture_output=True, text=True)
     progress.update(1)
 
