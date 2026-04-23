@@ -126,33 +126,33 @@ automatically downloaded and processed by the data preparation pipeline.
 ## Training from Scratch
 Train a new model on complete dataset:
 ```bash
-python main.py --task train --city nairobi --country kenya --year 2025
+python main.py --task train --city nairobi --country kenya --year 2024
 ```
 
 ## Fine-tuning with Pre-trained Weights
 Fine-tune a pre-trained model:
 ```bash
 # Using default global weights
-python main.py --task finetune --city nairobi --country kenya --year 2025
+python main.py --task finetune --city nairobi --country kenya --year 2024
 
 # Using custom weights
-python main.py --task finetune --city nairobi --country kenya --year 2025 --weights checkpoint/custom.h5
+python main.py --task finetune --city nairobi --country kenya --year 2024 --weights checkpoint/custom.h5
 ```
 
 ## Classification/Inference
 Generate segmentation maps from trained model:
 ```bash
 # Using city-specific weights
-python main.py --task classify --city nairobi --country kenya --year 2025
+python main.py --task classify --city nairobi --country kenya --year 2024
 
-# Using custom weights
-python main.py --task classify --city nairobi --country kenya --year 2025 --weights checkpoint/custom.h5
+# Using custom weights (replace {custom} with th actual name of model weight you would like to use)
+python main.py --task classify --city nairobi --country kenya --year 2024 --weights checkpoint/custom.h5
 ```
 
 ## SDG Statistics
 Compute SDG 11.1.1 statistics from classified rasters:
 ```bash
-python main.py --task sdg_stats --city nairobi --country kenya --year 2025
+python main.py --task sdg_stats --city nairobi --country kenya --year 2024
 ```
 
 **Optional**: Modify `config.yaml` to configure model and training parameters such as architecture, hyperparameters, and data paths.
