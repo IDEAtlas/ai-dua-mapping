@@ -85,26 +85,13 @@ cd ai-dua-mapping
 
 **Option 1: Using Conda**
 
-Install Anaconda by downloading it from https://repo.anaconda.com/archive/
-
-Create the Environment
-
-For CPU:
 ```bash
-conda env create -f environment.yaml
-```
-
-Activate the environment:
-```bash
-conda activate ideatlas
+python setup.py --conda
 ```
 
 **Option 2: Using Docker**
 
-Build the image:
-```bash
-docker build -f Dockerfile -t ideatlas .
-```
+python setup.py --docker
 
 Run the container in detached mode:
 ```bash
