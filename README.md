@@ -91,39 +91,24 @@ Create the Environment
 
 For CPU:
 ```bash
-conda env create -f env/environment-cpu.yaml
-```
-
-For GPU:
-```bash
-conda env create -f env/environment-gpu.yaml
+conda env create -f environment.yaml
 ```
 
 Activate the environment:
 ```bash
 conda activate ideatlas
 ```
-Set library paths to ensure graphics libraries are found (for GPU users only):
-```bash
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
-```
-
 
 **Option 2: Using Docker**
 
-Build the image for CPU:
+Build the image:
 ```bash
-docker build -f env/Dockerfile-cpu.tf -t ideatlas .
-```
-
-Or for GPU:
-```bash
-docker build -f env/Dockerfile-gpu.tf -t ideatlas .
+docker build -f Dockerfile -t ideatlas .
 ```
 
 Run the container in detached mode:
 ```bash
-docker run -dit --gpus all --name ideatlas -v $(pwd):/workspace ideatlas
+docker run -dit --gpus all --name ideatlas -v .:/ai-dua-mapping ideatlas
 ```
 
 Enter the container:
