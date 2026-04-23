@@ -82,6 +82,7 @@ git clone https://github.com/IDEAtlas/ai-dua-mapping.git
 ```bash
 cd ai-dua-mapping
 ```
+You can execute the code using either Conda or Docker. Please ensure your preferred tool is already installed on your computer before following the specific instructions for your chosen environment below
 
 **Option 1: Using Conda**
 
@@ -91,7 +92,9 @@ python setup.py --conda
 
 **Option 2: Using Docker**
 
+```bash
 python setup.py --docker
+```
 
 Run the container in detached mode:
 ```bash
