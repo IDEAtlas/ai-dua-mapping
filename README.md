@@ -96,16 +96,6 @@ python setup.py --conda
 python setup.py --docker
 ```
 
-Run the container in detached mode:
-```bash
-docker run -dit --gpus all --name ideatlas -v .:/ai-dua-mapping ideatlas
-```
-
-Enter the container:
-```bash
-docker exec -it ideatlas bash
-```
-
 # Running the workflows
 For training and fine tuning tasks, users must provide local DUA reference data in
 vector format.
