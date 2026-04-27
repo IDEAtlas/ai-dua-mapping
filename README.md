@@ -106,13 +106,13 @@ You can execute the code using either Conda or Docker. Please ensure your prefer
 For training and fine tuning tasks, users must provide local DUA reference data in
 vector format.
 - Place the file inside data/raw/reference_data/ directory and named as follows:
-city_country_reference_year_version.geojson
+city_country_reference_year.geojson
 - If the user have a predefined area of extent (AOI) it should be placed under
 data/raw/aoi/ and named as follows: city_country_aoi.geojson
 
 **Example**
 
-- data/raw/reference_data/nairobi_kenya_reference_2024_v1.geojson
+- data/raw/reference_data/nairobi_kenya_reference_2024.geojson
 - data/raw/aoi/nairobi_kenya_aoi.geojson
 
 All other required data such as Sentinel 2 imagery, building footprints and population grids are
