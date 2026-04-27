@@ -156,7 +156,7 @@ Compute SDG 11.1.1 statistics from classified rasters:
 python main.py --task sdg_stats --city nairobi --country kenya --year 2024
 ```
 ----
-To enable interactive experimentation via Jupyter Notebook, launch the DUA_mapping.ipynb file by executing the following command:
+To enable interactive experimentation via Jupyter Notebook, launch Jupyter lab by executing the following command and open DUA_mapping.ipynb:
 
 ```
 jupyter lab --ip=0.0.0.0 --no-browser --allow-root
