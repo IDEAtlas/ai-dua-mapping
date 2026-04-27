@@ -82,6 +82,11 @@ def get_s2(city_normalized: str, year: int, basedir: str) -> str:
     final_da = merged_native.rio.reproject("EPSG:4326", resampling=3, nodata=np.nan)
 
     # Save as COG
-    write_cog(final_da, output_path, overwrite=True, nodata=np.nan)
-    
+    # write_cog(final_da, output_path, overwrite=True, nodata=np.nan)
+    final_da.rio.to_raster(
+        output_path,
+        driver="COG",
+        compress="deflate",
+        nodata=np.nan
+    )
     return output_path
