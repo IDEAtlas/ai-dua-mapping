@@ -1,5 +1,5 @@
 import models    
-import segmentation_models as sm
+# import segmentation_models as sm
 
 def select_model(model_name, config):
 
@@ -23,8 +23,8 @@ def select_model(model_name, config):
         model = models.DeepLabV3Plus(input_shapes=input_shapes, num_classes=n_outputs).model
     elif model_name == 'unet':
         model = models.UNet(input_shape=(h,w,c), CL=n_outputs, dropout_rate=0.2, batch_norm=True)
-    elif model_name == 'fpn':
-        model = sm.FPN(input_shape=(h,w,c), classes=n_outputs, activation='softmax', encoder_weights=None, backbone_name='resnet50')
+    # elif model_name == 'fpn':
+    #     model = sm.FPN(input_shape=(h,w,c), classes=n_outputs, activation='softmax', encoder_weights=None, backbone_name='resnet50')
     else:
         raise ValueError(f"Model {model_name} not recognized.")
     
