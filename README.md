@@ -86,16 +86,20 @@ You can execute the code using either Conda or Docker. Please ensure your prefer
 
 **Option 1: Using Conda**
 
-```bash
-python setup.py --conda
-```
-
+  ```bash
+  python setup.py --conda
+  ```
+  ```bash
+  conda activate ideatlas
+  ```
 **Option 2: Using Docker**
 
-```bash
-python setup.py --docker
+  ```bash
+  python setup.py --docker
+  ```
+  ```bash
+  docker exec -it ideatlas bash
 ```
-
 # Running the workflows
 For training and fine tuning tasks, users must provide local DUA reference data in
 vector format.
@@ -111,7 +115,7 @@ data/raw/aoi/ and named as follows: city_country_aoi_fileformat
 All other required data (Sentinel 2 imagery, building footprints, population grids) are
 automatically downloaded and processed by the data preparation pipeline.
 
-**Note:** For citeis with morethan one word use hyphen to separate the words. Eg. San-Jose, Costa-Rica
+**Note:** When writing city or country names containing two or more words, connect them with hyphens (e.g., San-Jose, Costa-Rica).
 
 ## Training from Scratch
 Train a new model on complete dataset:
