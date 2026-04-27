@@ -100,6 +100,7 @@ You can execute the code using either Conda or Docker. Please ensure your prefer
   ```bash
   docker exec -it ideatlas bash
 ```
+
 # Running the workflows
 For training and fine tuning tasks, users must provide local DUA reference data in
 vector format.
@@ -109,6 +110,7 @@ city_country_reference_year_version.fileformat
 data/raw/aoi/ and named as follows: city_country_aoi_fileformat
 
 **Example for Nairobi, Kenya**
+
 - data/raw/reference_data/nairobi_kenya_reference_2024_v1.geojson
 - data/raw/aoi/nairobi_kenya_aoi.geojson
 
@@ -124,22 +126,26 @@ python main.py --task train --city nairobi --country kenya --year 2024
 ```
 
 ## Fine-tuning with Pre-trained Weights
-Fine-tune a pre-trained model:
-```bash
-# Using default global weights
-python main.py --task finetune --city nairobi --country kenya --year 2024
 
-# Using custom weights
+Using default global model weights
+```bash
+python main.py --task finetune --city nairobi --country kenya --year 2024
+```
+
+Using custom weights (replace {custom} with th actual name of model weight you would like to use)
+```bash
 python main.py --task finetune --city nairobi --country kenya --year 2024 --weights checkpoint/custom.h5
 ```
 
 ## Classification/Inference
 Generate segmentation maps from trained model:
-```bash
-# Using city-specific weights
-python main.py --task classify --city nairobi --country kenya --year 2024
 
-# Using custom weights (replace {custom} with th actual name of model weight you would like to use)
+Using city-specific weights
+```bash
+python main.py --task classify --city nairobi --country kenya --year 2024
+```
+Using custom weights (replace {custom} with th actual name of model weight you would like to use)
+```bash
 python main.py --task classify --city nairobi --country kenya --year 2024 --weights checkpoint/custom.h5
 ```
 
@@ -148,8 +154,13 @@ Compute SDG 11.1.1 statistics from classified rasters:
 ```bash
 python main.py --task sdg_stats --city nairobi --country kenya --year 2024
 ```
+----
+To enable interactive experimentation via Jupyter Notebook, launch the DUA_mapping.ipynb file by executing the following command:
 
-**Optional**: Modify `config.yaml` to configure model and training parameters such as architecture, hyperparameters, and data paths.
+```
+jupyter lab --ip=0.0.0.0 --no-browser --allow-root
+```
+**Optional**: Modify `config.yaml` to change model configuration and training parameters.
 
 ---
 
