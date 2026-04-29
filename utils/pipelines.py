@@ -14,7 +14,6 @@ from losses import losses
 from utils import dataloader as dl
 from utils.inference import inference_mbcnn
 from metrics import metrics
-import segmentation_models as sm
 
 # Setup logging
 logging.basicConfig(
@@ -63,10 +62,18 @@ class Pipeline:
     
     def _get_loss_function(self, class_weights: list):
         """Get loss function with class weights."""
+        # t_loss = losses.DiceFocalLoss(
+        #     class_weights=class_weights, 
+        #     dice_weight=1.0, 
+        #     focal_weight=2.0, 
+        #     alpha=0.25, 
+        #     gamma=2.5)
+        
+        import segmentation_models as sm
         dice_loss = sm.losses.DiceLoss(class_weights=class_weights) 
         focal_loss = sm.losses.CategoricalFocalLoss()
         t_loss =  dice_loss + (2 * focal_loss)
-        # return sm.losses.CategoricalFocalLoss()
+        
         return t_loss
     
     def _build_model(self):

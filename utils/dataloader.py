@@ -101,7 +101,6 @@ class MBCNNDataset(tf.keras.utils.Sequence):
         # Convert to numpy array
         all_labels = np.array(all_labels)
         
-        # Compute class weights
         classes = np.unique(all_labels)
         class_weights = compute_class_weight(
             'balanced',
@@ -109,10 +108,11 @@ class MBCNNDataset(tf.keras.utils.Sequence):
             y=all_labels
         )
         
-        # Convert to both formats
+        # Normalize to mean=1.0 to prevent loss inflation (per-sample weighting pattern)
+        class_weights = class_weights / np.mean(class_weights)
+        
         class_weight_dict = {i: weight for i, weight in enumerate(class_weights)}
         class_weight_list = class_weights.tolist()
-        # print(f"Class weights list: {class_weight_list}")
         
         return class_weight_dict, class_weight_list
 
