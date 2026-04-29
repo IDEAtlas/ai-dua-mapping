@@ -1,21 +1,6 @@
 #!/usr/bin/env python3
 """
-Unified entry point for training, fine-tuning, and classification workflows.
-
-Usage:
-    # Train from scratch
-    python main.py --task train --city Salvador --country Brazil --year 2025
-    
-    # Fine-tune with pre-trained weights
-    python main.py --task finetune --city Salvador --country Brazil --year 2025 (default global model weights)
-    python main.py --task finetune --city Salvador --country Brazil --year 2025 --weights checkpoint/custom.h5
-    
-    # Generate segmentation maps (classification/inference)
-    python main.py --task classify --city Salvador --country Brazil --year 2025 (applies the specified city's weights)
-    python main.py --task classify --city Salvador --country Brazil --year 2025 --weights checkpoint/custom.h5
-
-    # Compute SDG 11.1.1 statistics
-    python main.py --task sdg_stats --city Salvador --country Brazil --year 2025
+Unified entry point for training, fine-tuning, classification and generate sdg stats workflows.
 """
 
 import subprocess
@@ -25,11 +10,9 @@ import logging
 import os
 from datetime import datetime
 
-# Import configs early to set environment variables
 from utils.configs import load_configs
 cfg = load_configs('config.yaml')
 
-# Import orchestrator
 from utils.pipelines import Pipeline
 
 # Setup logging
@@ -44,7 +27,6 @@ logger = logging.getLogger(__name__)
 def parse_arguments():
     """Parse command-line arguments for all tasks."""
     parser = argparse.ArgumentParser(
-        description="Unified workflow for training, fine-tuning, and classification of building detection models.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     
@@ -53,7 +35,7 @@ def parse_arguments():
         type=str,
         required=True,
         choices=["train", "finetune", "classify", "sdg_stats"],
-        help="Task type: 'train' (full dataset), 'finetune' (limited data with pre-trained weights), 'classify' (inference only), 'sdg_stats' (compute SDG statistics)"
+        help="Task to execute: train, finetune, classify, or sdg_stats"
     )
     parser.add_argument(
         "--model",
