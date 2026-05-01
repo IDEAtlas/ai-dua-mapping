@@ -37,7 +37,7 @@ def setup_docker():
 
     execute_command(["docker", "build", "-t", "ideatlas", "./env/"])
     execute_command(get_docker_run_command())
-    execute_command(["docker", "exec", "-it", "ideatlas", "bash"])
+    # execute_command(["docker", "exec", "-it", "ideatlas", "bash"])
 
 def main():
     parser = argparse.ArgumentParser(description="Environment initialization.")
