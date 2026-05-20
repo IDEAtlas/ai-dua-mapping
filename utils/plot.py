@@ -85,19 +85,25 @@ def plot_prediction(test_iterator, model, batch_size=None, cmap=customCmap):
     for i in range(num_samples):
         print(f'Sample number: {i + 1}')
         
-        data_sample = test_images[0][i]
+        data_sample_s2 = test_images[0][i]
+        data_sample_bd = test_images[1][i]
         ground_truth = test_masks[i]
         
-        test_img_input = tf.expand_dims(data_sample, 0)
+        test_img_input_s2 = tf.expand_dims(data_sample_s2, 0)
+        test_img_input_bd = tf.expand_dims(data_sample_bd, 0)
         
-        # Pass the input tensor as a tuple of two elements to match multi-input model structure
-        test_pred = model.predict((test_img_input, test_img_input), verbose=0) 
+        # Use model call directly to avoid fused convolution issues
+        @tf.function(jit_compile=False)
+        def predict_fn(x1, x2):
+            return model((x1, x2), training=False)
+        
+        test_pred = predict_fn(test_img_input_s2, test_img_input_bd) 
         test_prediction = np.argmax(test_pred, axis=3)[0, :, :] 
 
         plt.figure(figsize=(20, 12))
         
         plt.subplot(231)
-        rgb_sample = tf.gather(data_sample, [2, 1, 0], axis=-1)
+        rgb_sample = tf.gather(data_sample_s2, [2, 1, 0], axis=-1)
         plt.imshow(rgb_sample * 3)
         plt.title(f"S2 sample {i + 1}")
         
